@@ -13,7 +13,6 @@ lipo -create target/aarch64-apple-ios-sim/release/libaries_askar.a target/x86_64
 
 mkdir -p target/tmp/include
 cp include/*.h target/tmp/include
-rm -rf target/AskarFramework.xcframework
 
 xcodebuild -create-xcframework \
   -library target/aarch64-apple-ios/release/libaries_askar.a \
@@ -23,3 +22,4 @@ xcodebuild -create-xcframework \
   -output target/AskarFramework.xcframework
 
 rm target/simulator_fat.a
+mv target/AskarFramework.xcframework wrapper/swift/Askar
