@@ -2,22 +2,24 @@
 
 set -e
 
-rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
+targets=("aarch64-apple-ios" "aarch64-apple-ios-sim" "x86_64-apple-ios")
 
-function copy_target() {
-  local target=$1
+for target in "${targets[@]}"; do
+  rustup target add $target
+  cargo build --release --no-default-features --features mobile --target $target
+done
 
-  mkdir -p target/$target/include
-  mkdir -p target/$target/lib
-  cp include/*.h target/$target/include
-  cp target/$target/release/libaries_askar.a target/$target/lib
-}
+lipo -create target/aarch64-apple-ios-sim/release/libaries_askar.a target/x86_64-apple-ios/release/libaries_askar.a -output target/simulator_fat.a
 
-cargo build --release --no-default-features --features mobile --target aarch64-apple-ios
-copy_target aarch64-apple-ios
-cargo build --release --no-default-features --features mobile --target aarch64-apple-ios-sim
-copy_target aarch64-apple-ios-sim
-cargo build --release --no-default-features --features mobile --target x86_64-apple-ios
-copy_target x86_64-apple-ios
+mkdir -p target/tmp/include
+cp include/*.h target/tmp/include
+rm -rf target/AskarFramework.xcframework
 
+xcodebuild -create-xcframework \
+  -library target/aarch64-apple-ios/release/libaries_askar.a \
+  -headers target/tmp/include \
+  -library target/simulator_fat.a \
+  -headers target/tmp/include \
+  -output target/AskarFramework.xcframework
 
+rm target/simulator_fat.a
