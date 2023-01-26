@@ -1,5 +1,6 @@
 import XCTest
 @testable import Askar
+import AskarFramework
 
 final class AskarTests: XCTestCase {
     func testExample() throws {
@@ -8,5 +9,6 @@ final class AskarTests: XCTestCase {
         // results.
         XCTAssertEqual(Askar().text, "Hello, World!")
         
+        XCTAssertEqual(ErrorCode(rawValue: 0), Success)
     }
 }
