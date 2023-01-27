@@ -11,4 +11,7 @@ final class AskarTests: XCTestCase {
         
         XCTAssertEqual(ErrorCode(rawValue: 0), Success)
     }
+
+    func testStore() throws {
+    }
 }
