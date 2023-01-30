@@ -2,7 +2,7 @@
 import Foundation
 
 public enum AskarError: LocalizedError {
-    case nativeError(code: Int64)
+    case nativeError(code: UInt32)
 
     public var errorDescription: String? {
         switch self {
