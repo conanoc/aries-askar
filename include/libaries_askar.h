@@ -7,7 +7,7 @@
 
 #define PAGE_SIZE 32
 
-enum ErrorCode
+typedef enum ErrorCode
 #ifdef __cplusplus
   : int64_t
 #endif // __cplusplus
@@ -22,10 +22,7 @@ enum ErrorCode
   Unexpected = 7,
   Unsupported = 8,
   Custom = 100,
-};
-#ifndef __cplusplus
-typedef int64_t ErrorCode;
-#endif // __cplusplus
+} ErrorCode;
 
 typedef struct FfiResultList_Entry FfiResultList_Entry;
 
