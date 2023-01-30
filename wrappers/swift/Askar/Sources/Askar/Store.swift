@@ -27,4 +27,18 @@ public class Store {
         return Store(handle: handle, path: path)
     }
 
+    public static func generateRawKey() throws -> String {
+        var out: UnsafePointer<CChar>?
+        let error = askar_store_generate_raw_key(ByteBuffer(), &out)
+        if error != Success {
+            throw AskarError.nativeError(code: error.rawValue)
+        }
+        guard let out = out else {
+            throw AskarError.wrapperError(message: "Failed to generate raw key")
+        }
+
+        let key = String(cString: out)
+        return key
+    }
+
 }
