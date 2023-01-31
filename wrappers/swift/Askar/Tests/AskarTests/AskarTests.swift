@@ -12,9 +12,17 @@ final class AskarTests: XCTestCase {
         let temporaryDirectoryURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let storeURL = temporaryDirectoryURL.appendingPathComponent("test.db")
         let key = try Store.generateRawKey()
-        let store = try await Store.provision(path: "sqlite://" + storeURL.path, keyMethod: "raw", passKey: key, recreate: true)
+        var store = try await Store.provision(path: storeURL.path, keyMethod: "raw", passKey: key, recreate: true)
 
         XCTAssertNotNil(store)
         XCTAssertTrue(FileManager.default.fileExists(atPath: storeURL.path))
+
+        try await store.close()
+
+        store = try await Store.open(path: storeURL.path, keyMethod: "raw", passKey: key)
+        try await store.close()
+
+        try await Store.remove(path: storeURL.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: storeURL.path))
     }
 }

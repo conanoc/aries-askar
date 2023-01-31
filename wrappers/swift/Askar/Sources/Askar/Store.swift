@@ -3,9 +3,10 @@ import Foundation
 import AskarFramework
 
 public class Store {
+    public static let URI_SCHEMA = "sqlite://"
     private let handle: StoreHandle
     private let path: String
-    private static var provisionContinuation: CheckedContinuation<StoreHandle, Error>?
+    private static var continuation: CheckedContinuation<StoreHandle, Error>?
 
     private init(handle: StoreHandle, path: String) {
         self.handle = handle
@@ -14,12 +15,12 @@ public class Store {
 
     public static func provision(path: String, keyMethod: String? = nil, passKey: String? = nil, profile: String? = nil, recreate: Bool = false) async throws -> Store {
         let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<StoreHandle, Error>) in
-            provisionContinuation = continuation
-            askar_store_provision(path, keyMethod, passKey, profile, recreate ? 1:0, { (_, err, handle) in
+            Store.continuation = continuation
+            askar_store_provision(URI_SCHEMA + path, keyMethod, passKey, profile, recreate ? 1:0, { (_, err, handle) in
                 if err != Success {
-                    Store.provisionContinuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+                    Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
-                    Store.provisionContinuation?.resume(returning: handle)
+                    Store.continuation?.resume(returning: handle)
                 }
             }, 0)
         }
@@ -39,6 +40,49 @@ public class Store {
 
         let key = String(cString: out)
         return key
+    }
+
+    public static func open(path: String, keyMethod: String? = nil, passKey: String? = nil, profile: String? = nil) async throws -> Store {
+        let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<StoreHandle, Error>) in
+            Store.continuation = continuation
+            askar_store_open(URI_SCHEMA + path, keyMethod, passKey, profile, { (_, err, handle) in
+                if err != Success {
+                    Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+                } else {
+                    Store.continuation?.resume(returning: handle)
+                }
+            }, 0)
+        }
+
+        return Store(handle: handle, path: path)
+    }
+
+    public func close() async throws {
+        _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<StoreHandle, Error>) in
+            Store.continuation = continuation
+            askar_store_close(handle, { (_, err) in
+                if err != Success {
+                    Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+                } else {
+                    Store.continuation?.resume(returning: StoreHandle(_0: 0))
+                }
+            }, 0)
+        }
+    }
+
+    public static func remove(path: String) async throws {
+        _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<StoreHandle, Error>) in
+            Store.continuation = continuation
+            askar_store_remove(URI_SCHEMA + path, { (_, err, removed) in
+                if err != Success {
+                    Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+                } else if removed == 0 {
+                    Store.continuation?.resume(throwing: AskarError.wrapperError(message: "Failed to remove store"))
+                } else {
+                    Store.continuation?.resume(returning: StoreHandle(_0: 0))
+                }
+            }, 0)
+        }
     }
 
 }
