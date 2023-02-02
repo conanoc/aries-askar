@@ -48,8 +48,7 @@ public struct Entry {
                 throw AskarError.nativeError(code: error.rawValue)
             }
 
-            let value = Data(bytes: buf.data, count: Int(buf.len))
-            return value
+            return buf.toData()
         }
     }
     var tags: [String: String] {

@@ -1,23 +1,6 @@
 import Foundation
 import AskarFramework
 
-public enum EntryOperation: Int8 {
-    case INSERT = 0
-    case REPLACE = 1
-    case REMOVE = 2
-}
-
-extension ByteBuffer {
-    init(fromString: String?) {
-        if let fromString = fromString {
-            var data = fromString.data(using: .utf8)!
-            self.init(len: Int64(data.count), data: data.withUnsafeMutableBytes { $0.baseAddress?.assumingMemoryBound(to: UInt8.self) })
-        } else {
-            self.init(len: 0, data: nil)
-        }
-    }
-}
-
 public class Session {
     let _handle: SessionHandle
     private static var continuation: CheckedContinuation<Any, Error>?
