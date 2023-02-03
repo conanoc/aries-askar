@@ -73,6 +73,18 @@ public struct KeyEntry {
             return try JSONDecoder().decode([String: String].self, from: tagsJson.data(using: .utf8)!)
         }
     }
+
+    public var key: Key {
+        get throws {
+            var out = LocalKeyHandle()
+            let error = askar_key_entry_list_load_local(list, pos, &out)
+            if error != Success {
+                throw AskarError.nativeError(code: error.rawValue)
+            }
+
+            return Key(handle: out)
+        }
+    }
 }
 
 public class KeyEntryList: IteratorProtocol {
