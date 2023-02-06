@@ -1,23 +1,43 @@
 import Foundation
 import AskarFramework
 
-public extension ByteBuffer {
+public class FfiByteBuffer {
+    let buffer: ByteBuffer
+    let pointer: UnsafeMutablePointer<UInt8>?
+
     init(fromData: Data?) {
-        if var fromData = fromData {
-            self.init(len: Int64(fromData.count), data: fromData.withUnsafeMutableBytes { $0.baseAddress?.assumingMemoryBound(to: UInt8.self) })
+        if let data = fromData {
+            pointer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+            pointer!.initialize(repeating: 0, count: data.count)
+            data.copyBytes(to: pointer!, count: data.count)
+            buffer = ByteBuffer(len: Int64(data.count), data: pointer)
         } else {
-            self.init(len: 0, data: nil)
+            pointer = nil
+            buffer = ByteBuffer(len: 0, data: nil)
         }
     }
-
-    init(fromString: String?) {
+    
+    convenience init(fromString: String?) {
         self.init(fromData: fromString?.data(using: .utf8))
+    }
+    
+    deinit {
+        pointer?.deallocate()
+    }
+}
+
+public extension ByteBuffer {
+    func toData() -> Data {
+        return Data(bytes: UnsafeMutableRawPointer(data), count: Int(len))
     }
 }
 
 public extension SecretBuffer {
+    // Deallocate the buffer here
     func toData() -> Data {
-        return Data(bytes: data, count: Int(len))
+        let data = Data(bytes: data, count: Int(len))
+        askar_buffer_free(self)
+        return data
     }
 }
 

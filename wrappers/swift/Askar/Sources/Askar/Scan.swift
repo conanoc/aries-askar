@@ -22,13 +22,16 @@ public class Scan: AsyncIteratorProtocol {
     func scanNext() async throws -> EntryList {
         let list = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Scan.continuation = continuation
-            askar_scan_next(handle!, { (_, err, list) in
+            let err = askar_scan_next(handle!, { (_, err, list) in
                 if err != Success {
                     Scan.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
                     Scan.continuation?.resume(returning: list)
                 }
             }, 0)
+            if err != Success {
+                Scan.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         } as! EntryListHandle
 
         return try EntryList(handle: list)
@@ -38,13 +41,16 @@ public class Scan: AsyncIteratorProtocol {
         if handle == nil {
             let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
                 Scan.continuation = continuation
-                askar_scan_start(store.handle, nil, category, tagFilter, offset, limit, { (_, err, handle) in
+                let err = askar_scan_start(store.handle, nil, category, tagFilter, offset, limit, { (_, err, handle) in
                     if err != Success {
                         Scan.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                     } else {
                         Scan.continuation?.resume(returning: handle)
                     }
                 }, 0)
+                if err != Success {
+                    Scan.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+                }
             } as! ScanHandle
             self.handle = handle
             self.list = try await scanNext()

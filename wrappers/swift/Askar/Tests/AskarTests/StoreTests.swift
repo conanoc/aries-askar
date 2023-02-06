@@ -7,7 +7,7 @@ final class StoreTests: XCTestCase {
         "category": "test category",
         "name": "test name",
         "value": "test_value",
-        "tags": "{\"~plaintag\": \"a\", \"enctag\": {\"b\", \"c\"}}"
+        "tags": "{\"~plaintag\": \"a\", \"enctag\": [\"b\", \"c\"]}"
     ]
 
     override func setUp() async throws {
@@ -26,7 +26,6 @@ final class StoreTests: XCTestCase {
     }
 
     func testInsertUpdate() async throws {
-        print("rust_log: ", ProcessInfo.processInfo.environment["RUST_LOG"])
         let session = store.openSession!
         try await session.update(
             operation: EntryOperation.INSERT,

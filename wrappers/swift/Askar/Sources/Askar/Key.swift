@@ -25,7 +25,8 @@ public class Key {
 
     public static func fromSeed(_ seed: String, alg: KeyAlg) throws -> Key {
         var handle = LocalKeyHandle()
-        let error = askar_key_from_seed(alg.rawValue, ByteBuffer(fromString: seed), nil, &handle)
+        let ffi = FfiByteBuffer(fromString: seed)
+        let error = askar_key_from_seed(alg.rawValue, ffi.buffer, nil, &handle)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -35,7 +36,8 @@ public class Key {
 
     public static func fromSecretBytes(_ secret: Data, alg: KeyAlg) throws -> Key {
         var handle = LocalKeyHandle()
-        let error = askar_key_from_secret_bytes(alg.rawValue, ByteBuffer(fromData: secret), &handle)
+        let ffi = FfiByteBuffer(fromData: secret)
+        let error = askar_key_from_secret_bytes(alg.rawValue, ffi.buffer, &handle)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -45,7 +47,8 @@ public class Key {
 
     public static func fromPublicBytes(_ data: Data, alg: KeyAlg) throws -> Key {
         var handle = LocalKeyHandle()
-        let error = askar_key_from_public_bytes(alg.rawValue, ByteBuffer(fromData: data), &handle)
+        let ffi = FfiByteBuffer(fromData: data)
+        let error = askar_key_from_public_bytes(alg.rawValue, ffi.buffer, &handle)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -55,7 +58,8 @@ public class Key {
 
     public static func fromJwk(_ jwk: Data) throws -> Key {
         var handle = LocalKeyHandle()
-        let error = askar_key_from_jwk(ByteBuffer(fromData: jwk), &handle)
+        let ffi = FfiByteBuffer(fromData: jwk)
+        let error = askar_key_from_jwk(ffi.buffer, &handle)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -171,7 +175,10 @@ public class Key {
 
     public func aeadEncrypt(message: Data, nonce: Data? = nil, aad: Data? = nil) throws -> Encrypted {
         var buf = EncryptedBuffer()
-        let error = askar_key_aead_encrypt(handle, ByteBuffer(fromData: message), ByteBuffer(fromData: nonce), ByteBuffer(fromData: aad), &buf)
+        let messageBuf = FfiByteBuffer(fromData: message)
+        let nonceBuf = FfiByteBuffer(fromData: nonce)
+        let aadBuf = FfiByteBuffer(fromData: aad)
+        let error = askar_key_aead_encrypt(handle, messageBuf.buffer, nonceBuf.buffer, aadBuf.buffer, &buf)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -181,7 +188,11 @@ public class Key {
 
     public func aeadDecrypt(ciphertext: Data, nonce: Data, tag: Data? = nil, aad: Data? = nil) throws -> Data {
         var buf = SecretBuffer()
-        let error = askar_key_aead_decrypt(handle, ByteBuffer(fromData: ciphertext), ByteBuffer(fromData: nonce), ByteBuffer(fromData: tag), ByteBuffer(fromData: aad), &buf)
+        let ciphertextBuf = FfiByteBuffer(fromData: ciphertext)
+        let nonceBuf = FfiByteBuffer(fromData: nonce)
+        let tagBuf = FfiByteBuffer(fromData: tag)
+        let aadBuf = FfiByteBuffer(fromData: aad)
+        let error = askar_key_aead_decrypt(handle, ciphertextBuf.buffer, nonceBuf.buffer, tagBuf.buffer, aadBuf.buffer, &buf)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -196,7 +207,8 @@ public class Key {
 
     public func signMessage(message: Data) throws -> Data {
         var buf = SecretBuffer()
-        let error = askar_key_sign_message(handle, ByteBuffer(fromData: message), nil, &buf)
+        let ffi = FfiByteBuffer(fromData: message)
+        let error = askar_key_sign_message(handle, ffi.buffer, nil, &buf)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -206,7 +218,9 @@ public class Key {
 
     public func verifySignature(message: Data, signature: Data) throws -> Bool {
         var out: Int8 = 0
-        let error = askar_key_verify_signature(handle, ByteBuffer(fromData: message), ByteBuffer(fromData: signature), nil, &out)
+        let messageBuf = FfiByteBuffer(fromData: message)
+        let signatureBuf = FfiByteBuffer(fromData: signature)
+        let error = askar_key_verify_signature(handle, messageBuf.buffer, signatureBuf.buffer, nil, &out)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -216,7 +230,8 @@ public class Key {
 
     public func wrapKey(other: Key, nonce: Data? = nil) throws -> Encrypted {
         var buf = EncryptedBuffer()
-        let error = askar_key_wrap_key(handle, other.handle, ByteBuffer(fromData: nonce), &buf)
+        let ffi = FfiByteBuffer(fromData: nonce)
+        let error = askar_key_wrap_key(handle, other.handle, ffi.buffer, &buf)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -226,7 +241,10 @@ public class Key {
 
     public func unwrapKey(alg: KeyAlg, ciphertext: Data, nonce: Data? = nil, tag: Data? = nil) throws -> Key {
         var out = LocalKeyHandle()
-        let error = askar_key_unwrap_key(handle, alg.rawValue, ByteBuffer(fromData: ciphertext), ByteBuffer(fromData: nonce), ByteBuffer(fromData: tag), &out)
+        let ciphertextBuf = FfiByteBuffer(fromData: ciphertext)
+        let nonceBuf = FfiByteBuffer(fromData: nonce)
+        let tagBuf = FfiByteBuffer(fromData: tag)
+        let error = askar_key_unwrap_key(handle, alg.rawValue, ciphertextBuf.buffer, nonceBuf.buffer, tagBuf.buffer, &out)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }

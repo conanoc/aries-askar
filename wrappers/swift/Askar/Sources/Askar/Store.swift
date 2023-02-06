@@ -16,13 +16,16 @@ public class Store {
     public static func provision(path: String, keyMethod: String? = nil, passKey: String? = nil, recreate: Bool = false) async throws -> Store {
         let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Store.continuation = continuation
-            askar_store_provision(URI_SCHEMA + path, keyMethod, passKey, nil, recreate ? 1:0, { (_, err, handle) in
+            let err = askar_store_provision(URI_SCHEMA + path, keyMethod, passKey, nil, recreate ? 1:0, { (_, err, handle) in
                 if err != Success {
                     Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
                     Store.continuation?.resume(returning: handle)
                 }
             }, 0)
+            if err != Success {
+                Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         } as! StoreHandle
 
         return Store(handle: handle, path: path)
@@ -42,13 +45,16 @@ public class Store {
     public static func open(path: String, keyMethod: String? = nil, passKey: String? = nil) async throws -> Store {
         let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Store.continuation = continuation
-            askar_store_open(URI_SCHEMA + path, keyMethod, passKey, nil, { (_, err, handle) in
+            let err = askar_store_open(URI_SCHEMA + path, keyMethod, passKey, nil, { (_, err, handle) in
                 if err != Success {
                     Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
                     Store.continuation?.resume(returning: handle)
                 }
             }, 0)
+            if err != Success {
+                Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         } as! StoreHandle
 
         return Store(handle: handle, path: path)
@@ -61,20 +67,23 @@ public class Store {
 
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Store.continuation = continuation
-            askar_store_close(handle, { (_, err) in
+            let err = askar_store_close(handle, { (_, err) in
                 if err != Success {
                     Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
                     Store.continuation?.resume(returning: ())
                 }
             }, 0)
+            if err != Success {
+                Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         }
     }
 
     public static func remove(path: String) async throws {
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Store.continuation = continuation
-            askar_store_remove(URI_SCHEMA + path, { (_, err, removed) in
+            let err = askar_store_remove(URI_SCHEMA + path, { (_, err, removed) in
                 if err != Success {
                     Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else if removed == 0 {
@@ -83,6 +92,9 @@ public class Store {
                     Store.continuation?.resume(returning: ())
                 }
             }, 0)
+            if err != Success {
+                Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         }
     }
 
@@ -93,13 +105,16 @@ public class Store {
 
         let session = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Store.continuation = continuation
-            askar_session_start(handle, nil, 0 /* do not support transaction */, { (_, err, session) in
+            let err = askar_session_start(handle, nil, 0 /* do not support transaction */, { (_, err, session) in
                 if err != Success {
                     Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
                 } else {
                     Store.continuation?.resume(returning: session)
                 }
             }, 0)
+            if err != Success {
+                Store.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
+            }
         } as! SessionHandle
 
         openSession = Session(handle: session)

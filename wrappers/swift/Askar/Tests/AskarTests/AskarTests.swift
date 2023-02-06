@@ -25,4 +25,12 @@ final class AskarTests: XCTestCase {
         try await Store.remove(path: storeURL.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: storeURL.path))
     }
+    
+    func testByteBuffer() throws {
+        let str = "hello"
+        var buf = FfiByteBuffer(fromString: str)
+        let data2 = buf.buffer.toData()
+        let str2 = String(data: data2, encoding: .utf8)
+        XCTAssertEqual(str, str2)
+    }
 }
