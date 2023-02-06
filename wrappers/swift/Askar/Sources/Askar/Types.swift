@@ -16,11 +16,11 @@ public class FfiByteBuffer {
             buffer = ByteBuffer(len: 0, data: nil)
         }
     }
-    
+
     convenience init(fromString: String?) {
         self.init(fromData: fromString?.data(using: .utf8))
     }
-    
+
     deinit {
         pointer?.deallocate()
     }

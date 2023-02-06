@@ -25,7 +25,7 @@ final class AskarTests: XCTestCase {
         try await Store.remove(path: storeURL.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: storeURL.path))
     }
-    
+
     func testByteBuffer() throws {
         let str = "hello"
         var buf = FfiByteBuffer(fromString: str)
