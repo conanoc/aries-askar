@@ -2,10 +2,10 @@ import Foundation
 import AskarFramework
 
 public struct KeyEntry {
-    let list: KeyEntryListHandle
+    let list: KeyEntryList
     let pos: Int32
 
-    public init(list: KeyEntryListHandle, pos: Int32) {
+    public init(list: KeyEntryList, pos: Int32) {
         self.list = list
         self.pos = pos
     }
@@ -13,7 +13,7 @@ public struct KeyEntry {
     public var algorithm: String {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_key_entry_list_get_algorithm(list, pos, &out)
+            let error = askar_key_entry_list_get_algorithm(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -29,7 +29,7 @@ public struct KeyEntry {
     public var name: String {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_key_entry_list_get_name(list, pos, &out)
+            let error = askar_key_entry_list_get_name(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -45,7 +45,7 @@ public struct KeyEntry {
     public var metadata: String {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_key_entry_list_get_metadata(list, pos, &out)
+            let error = askar_key_entry_list_get_metadata(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -61,7 +61,7 @@ public struct KeyEntry {
     public var tags: [String: String] {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_key_entry_list_get_tags(list, pos, &out)
+            let error = askar_key_entry_list_get_tags(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -77,7 +77,7 @@ public struct KeyEntry {
     public var key: Key {
         get throws {
             var out = LocalKeyHandle()
-            let error = askar_key_entry_list_load_local(list, pos, &out)
+            let error = askar_key_entry_list_load_local(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -111,9 +111,13 @@ public class KeyEntryList: IteratorProtocol {
         if pos >= length {
             return nil
         }
-        let entry = KeyEntry(list: handle, pos: pos)
+        let entry = KeyEntry(list: self, pos: pos)
         pos += 1
         return entry
+    }
+
+    public var count: Int {
+        return Int(length)
     }
 
     deinit {

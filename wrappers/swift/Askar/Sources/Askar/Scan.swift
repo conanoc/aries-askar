@@ -19,7 +19,7 @@ public class Scan: AsyncIteratorProtocol {
         self.limit = limit
     }
 
-    func scanNext() async throws -> EntryList {
+    func scanNext() async throws -> EntryList? {
         let list = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Scan.continuation = continuation
             let err = askar_scan_next(handle!, { (_, err, list) in
@@ -34,7 +34,11 @@ public class Scan: AsyncIteratorProtocol {
             }
         } as! EntryListHandle
 
-        return try EntryList(handle: list)
+        if list.isEmpty {
+            return nil
+        } else {
+            return try EntryList(handle: list)
+        }
     }
 
     public func next() async throws -> Entry? {
@@ -54,6 +58,9 @@ public class Scan: AsyncIteratorProtocol {
             } as! ScanHandle
             self.handle = handle
             self.list = try await scanNext()
+            if self.list == nil {
+                return nil
+            }
         }
 
         let entry = list!.next()
@@ -61,6 +68,9 @@ public class Scan: AsyncIteratorProtocol {
             return entry
         }
         self.list = try await scanNext()
+        if self.list == nil {
+            return nil
+        }
         return self.list!.next()
     }
 

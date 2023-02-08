@@ -3,6 +3,7 @@ import XCTest
 
 final class StoreTests: XCTestCase {
     var store: Store!
+    var session: Session!
     let TEST_ENTRY = [
         "category": "test category",
         "name": "test name",
@@ -18,6 +19,7 @@ final class StoreTests: XCTestCase {
         let key = try Store.generateRawKey()
         store = try await Store.provision(path: storeURL.path, keyMethod: "raw", passKey: key, recreate: true)
         try await store.doOpenSession()
+        session = store.openSession!
     }
 
     override func tearDown() async throws {
@@ -26,7 +28,6 @@ final class StoreTests: XCTestCase {
     }
 
     func testInsertUpdate() async throws {
-        let session = store.openSession!
         try await session.update(
             operation: EntryOperation.INSERT,
             category: TEST_ENTRY["category"]!,
@@ -88,7 +89,6 @@ final class StoreTests: XCTestCase {
     }
 
     func testScan() async throws {
-        let session = store.openSession!
         try await session.update(
             operation: EntryOperation.INSERT,
             category: TEST_ENTRY["category"]!,
@@ -102,5 +102,31 @@ final class StoreTests: XCTestCase {
         let first = rows[0]
         XCTAssertEqual(try first.name, TEST_ENTRY["name"])
         XCTAssertEqual(String(data: try first.value, encoding: .utf8), TEST_ENTRY["value"]!)
+    }
+
+    func testKeyStore() async throws {
+        let keypair = try Key.generate(alg: KeyAlg.ED25519)
+        let keyName = "test_key"
+        try await session.insertKey(keypair, name: keyName, meta: "metadata", tags: "{\"a\": \"b\"}")
+
+        var key = try await session.fetchKey(name: keyName)
+        XCTAssertEqual(try key?.name, keyName)
+        XCTAssertEqual(try key?.tags["a"], "b")
+
+        try await session.updateKey(name: keyName, meta: "new metadata", tags: "{\"a\": \"c\"}")
+        key = try await session.fetchKey(name: keyName)
+        XCTAssertEqual(try key?.name, keyName)
+        XCTAssertEqual(try key?.tags["a"], "c")
+
+        let thumbprint = try keypair.getJwkThumbprint()
+        XCTAssertEqual(try key?.key.getJwkThumbprint(), thumbprint)
+
+        let keylist = try await session.fetchAllKeys(alg: KeyAlg.ED25519, thumbprint: thumbprint, tagFilter: "{\"a\": \"c\"}", limit: 1)
+        XCTAssertEqual(keylist?.count, 1)
+        XCTAssertEqual(try keylist?.next()?.name, keyName)
+
+        try await session.removeKey(name: keyName)
+        key = try await session.fetchKey(name: keyName)
+        XCTAssertNil(key)
     }
 }
