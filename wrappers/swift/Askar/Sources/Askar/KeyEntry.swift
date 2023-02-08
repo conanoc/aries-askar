@@ -92,14 +92,19 @@ public class KeyEntryList: IteratorProtocol {
     let length: Int32
     private var pos: Int32 = 0
 
-    public init(handle: KeyEntryListHandle) throws {
+    public init(handle: KeyEntryListHandle, len: Int? = nil) throws {
         self.handle = handle
-        var len: Int32 = 0
-        let error = askar_key_entry_list_count(handle, &len)
+        if len != nil {
+            self.length = Int32(len!)
+            return
+        }
+
+        var out: Int32 = 0
+        let error = askar_key_entry_list_count(handle, &out)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
-        self.length = len
+        self.length = out
     }
 
     public func next() -> KeyEntry? {

@@ -41,6 +41,18 @@ public extension SecretBuffer {
     }
 }
 
+extension EntryListHandle {
+    var isEmpty: Bool {
+        return self._0 == nil
+    }
+}
+
+extension KeyEntryListHandle {
+    var isEmpty: Bool {
+        return self._0 == nil
+    }
+}
+
 public class Encrypted {
     public let buf: EncryptedBuffer
 

@@ -64,6 +64,14 @@ public class Scan: AsyncIteratorProtocol {
         return self.list!.next()
     }
 
+    public func fetchAll() async throws -> [Entry] {
+        var entries: [Entry] = []
+        while let entry = try await self.next() {
+            entries.append(entry)
+        }
+        return entries
+    }
+
     deinit {
         if handle != nil {
             askar_scan_free(handle!)

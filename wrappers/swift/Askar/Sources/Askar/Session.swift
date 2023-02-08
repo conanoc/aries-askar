@@ -27,7 +27,7 @@ public class Session {
         return Int(count)
     }
 
-    public func fetch(category: String, name: String, forUpdate: Bool) async throws -> Entry? {
+    public func fetch(category: String, name: String, forUpdate: Bool = false) async throws -> Entry? {
         let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Session.continuation = continuation
             let err = askar_session_fetch(_handle, category, name, forUpdate ? 1:0, { (_, err, handle) in
@@ -42,10 +42,14 @@ public class Session {
             }
         } as! EntryListHandle
 
-        return try EntryList(handle: handle).next()
+        if !handle.isEmpty {
+            return try EntryList(handle: handle, len: 1).next()
+        } else {
+            return nil
+        }
     }
 
-    public func fetchAll(category: String, tagFilter: String? = nil, limit: Int = -1, forUpdate: Bool) async throws -> EntryList {
+    public func fetchAll(category: String, tagFilter: String? = nil, limit: Int = -1, forUpdate: Bool = false) async throws -> EntryList? {
         let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Session.continuation = continuation
             let err = askar_session_fetch_all(_handle, category, tagFilter, Int64(limit), forUpdate ? 1:0, { (_, err, handle) in
@@ -60,11 +64,15 @@ public class Session {
             }
         } as! EntryListHandle
 
-        return try EntryList(handle: handle)
+        if !handle.isEmpty {
+            return try EntryList(handle: handle)
+        } else {
+            return nil
+        }
     }
 
-    public func update(operation: EntryOperation, category: String, name: String, value: String? = nil, tags: String? = nil, expiryMillis: Int = -1) async throws {
-        let byteBuf = FfiByteBuffer(fromString: value)
+    public func update(operation: EntryOperation, category: String, name: String, value: Data? = nil, tags: String? = nil, expiryMillis: Int = -1) async throws {
+        let byteBuf = FfiByteBuffer(fromData: value)
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Session.continuation = continuation
             let err = askar_session_update(_handle, operation.rawValue, category, name, byteBuf.buffer, tags, Int64(expiryMillis), { (_, err) in
@@ -97,7 +105,7 @@ public class Session {
     }
 
     public func fetchKey(name: String, forUpdate: Bool = false) async throws -> KeyEntry? {
-        if let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
+        let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Session.continuation = continuation
             let err = askar_session_fetch_key(_handle, name, forUpdate ? 1:0, { (_, err, handle) in
                 if err != Success {
@@ -109,15 +117,17 @@ public class Session {
             if err != Success {
                 Session.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
             }
-        } as? KeyEntryListHandle {
-            return try KeyEntryList(handle: handle).next()
+        } as! KeyEntryListHandle
+
+        if !handle.isEmpty {
+            return try KeyEntryList(handle: handle, len: 1).next()
         } else {
             return nil
         }
     }
 
     public func fetchAllKeys(alg: KeyAlg? = nil, thumbprint: String? = nil, tagFilter: String? = nil, limit: Int = -1, forUpdate: Bool = false) async throws -> KeyEntryList? {
-        if let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
+        let handle = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
             Session.continuation = continuation
             let err = askar_session_fetch_all_keys(_handle, alg?.rawValue, thumbprint, tagFilter, Int64(limit), forUpdate ? 1:0, { (_, err, handle) in
                 if err != Success {
@@ -129,7 +139,9 @@ public class Session {
             if err != Success {
                 Session.continuation?.resume(throwing: AskarError.nativeError(code: err.rawValue))
             }
-        } as? KeyEntryListHandle {
+        } as! KeyEntryListHandle
+
+        if !handle.isEmpty {
             return try KeyEntryList(handle: handle)
         } else {
             return nil

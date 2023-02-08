@@ -2,10 +2,10 @@ import Foundation
 import AskarFramework
 
 public struct Entry {
-    let list: EntryListHandle
+    let list: EntryList
     let pos: Int32
 
-    public init(list: EntryListHandle, pos: Int32) {
+    public init(list: EntryList, pos: Int32) {
         self.list = list
         self.pos = pos
     }
@@ -13,7 +13,7 @@ public struct Entry {
     var name: String {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_entry_list_get_name(list, pos, &out)
+            let error = askar_entry_list_get_name(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -28,7 +28,7 @@ public struct Entry {
     var category: String {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_entry_list_get_category(list, pos, &out)
+            let error = askar_entry_list_get_category(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -43,7 +43,7 @@ public struct Entry {
     var value: Data {
         get throws {
             var buf = SecretBuffer()
-            let error = askar_entry_list_get_value(list, pos, &buf)
+            let error = askar_entry_list_get_value(list.handle, pos, &buf)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -54,7 +54,7 @@ public struct Entry {
     var tags: [String: String] {
         get throws {
             var out: UnsafePointer<CChar>?
-            let error = askar_entry_list_get_tags(list, pos, &out)
+            let error = askar_entry_list_get_tags(list.handle, pos, &out)
             if error != Success {
                 throw AskarError.nativeError(code: error.rawValue)
             }
@@ -73,14 +73,19 @@ public class EntryList: IteratorProtocol {
     let length: Int32
     private var pos: Int32 = 0
 
-    public init(handle: EntryListHandle) throws {
+    public init(handle: EntryListHandle, len: Int? = nil) throws {
         self.handle = handle
-        var len: Int32 = 0
-        let error = askar_entry_list_count(handle, &len)
+        if len != nil {
+            self.length = Int32(len!)
+            return
+        }
+
+        var out: Int32 = 0
+        let error = askar_entry_list_count(handle, &out)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
-        self.length = len
+        length = out
     }
 
     public func next() -> Entry? {
@@ -88,9 +93,13 @@ public class EntryList: IteratorProtocol {
             return nil
         }
 
-        let entry = Entry(list: handle, pos: pos)
+        let entry = Entry(list: self, pos: pos)
         pos += 1
         return entry
+    }
+
+    public var count: Int {
+        return Int(length)
     }
 
     deinit {
