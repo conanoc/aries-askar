@@ -23,10 +23,10 @@ public class Key {
         return Key(handle: handle)
     }
 
-    public static func fromSeed(_ seed: String, alg: KeyAlg) throws -> Key {
+    public static func fromSeed(_ seed: String, alg: KeyAlg, method: SeedMethod? = nil) throws -> Key {
         var handle = LocalKeyHandle()
         let ffi = FfiByteBuffer(fromString: seed)
-        let error = askar_key_from_seed(alg.rawValue, ffi.buffer, nil, &handle)
+        let error = askar_key_from_seed(alg.rawValue, ffi.buffer, method?.rawValue, &handle)
         if error != Success {
             throw AskarError.nativeError(code: error.rawValue)
         }
@@ -200,12 +200,12 @@ public class Key {
         return buf.toData()
     }
 
-    public func aeadDecrypt(ciphertext: Encrypted, nonce: Data, tag: Data? = nil, aad: Data? = nil) throws -> Data {
+    public func aeadDecrypt(encrypted: Encrypted, nonce: Data, tag: Data? = nil, aad: Data? = nil) throws -> Data {
         // In line with the Python wrapper: use ciphertextAndTag for ciphertext and override the given nonce.
-        return try aeadDecrypt(ciphertext: ciphertext.ciphertextAndTag, nonce: ciphertext.nonce, tag: tag, aad: aad)
+        return try aeadDecrypt(ciphertext: encrypted.ciphertextAndTag, nonce: encrypted.nonce, tag: tag, aad: aad)
     }
 
-    public func signMessage(message: Data) throws -> Data {
+    public func signMessage(_ message: Data) throws -> Data {
         var buf = SecretBuffer()
         let ffi = FfiByteBuffer(fromData: message)
         let error = askar_key_sign_message(handle, ffi.buffer, nil, &buf)
@@ -252,8 +252,8 @@ public class Key {
         return Key(handle: out)
     }
 
-    public func unwrapKey(alg: KeyAlg, ciphertext: Encrypted, nonce: Data? = nil, tag: Data? = nil) throws -> Key {
+    public func unwrapKey(alg: KeyAlg, encrypted: Encrypted, nonce: Data? = nil, tag: Data? = nil) throws -> Key {
         // In line with the Python wrapper: use ciphertextAndTag for ciphertext and do not override the given nonce.
-        return try unwrapKey(alg: alg, ciphertext: ciphertext.ciphertextAndTag, nonce: nonce, tag: tag)
+        return try unwrapKey(alg: alg, ciphertext: encrypted.ciphertextAndTag, nonce: nonce, tag: tag)
     }
 }

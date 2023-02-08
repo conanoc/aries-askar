@@ -91,6 +91,10 @@ public enum EntryOperation: Int8 {
     case REMOVE = 2
 }
 
+public enum SeedMethod: String {
+    case BlsKeyGen = "bls_keygen"
+}
+
 public enum KeyAlg: String {
     case A128GCM = "a128gcm"
     case A256GCM = "a256gcm"
