@@ -229,6 +229,8 @@ typedef void (*LogCallback)(const void *context, int32_t level, const char *targ
 extern "C" {
 #endif // __cplusplus
 
+void askar_string_free(const char *buffer);
+
 void askar_buffer_free(struct SecretBuffer buffer);
 
 void askar_clear_custom_logger(void);

@@ -23,7 +23,10 @@ final class StoreTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        try await Store.remove(path: store.path)
+        if store != nil {
+            try await store.close()
+            try await Store.remove(path: store.path)
+        }
         try await super.tearDown()
     }
 

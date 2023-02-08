@@ -22,6 +22,7 @@ public struct KeyEntry {
             }
 
             let algorithm = String(cString: out)
+            askar_string_free(out)
             return algorithm
         }
     }
@@ -38,6 +39,7 @@ public struct KeyEntry {
             }
 
             let name = String(cString: out)
+            askar_string_free(out)
             return name
         }
     }
@@ -54,6 +56,7 @@ public struct KeyEntry {
             }
 
             let metadata = String(cString: out)
+            askar_string_free(out)
             return metadata
         }
     }
@@ -70,6 +73,7 @@ public struct KeyEntry {
             }
 
             let tagsJson = String(cString: out)
+            askar_string_free(out)
             return try JSONDecoder().decode([String: String].self, from: tagsJson.data(using: .utf8)!)
         }
     }

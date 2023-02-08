@@ -22,6 +22,7 @@ public struct Entry {
             }
 
             let name = String(cString: out)
+            askar_string_free(out)
             return name
         }
     }
@@ -37,6 +38,7 @@ public struct Entry {
             }
 
             let category = String(cString: out)
+            askar_string_free(out)
             return category
         }
     }
@@ -63,6 +65,7 @@ public struct Entry {
             }
 
             let tagsJson = String(cString: out)
+            askar_string_free(out)
             return try JSONDecoder().decode([String: String].self, from: tagsJson.data(using: .utf8)!)
         }
     }

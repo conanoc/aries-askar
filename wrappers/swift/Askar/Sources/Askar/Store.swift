@@ -63,6 +63,7 @@ public class Store {
     public func close() async throws {
         if openSession != nil {
             try await openSession!.close()
+            openSession = nil
         }
 
         _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
