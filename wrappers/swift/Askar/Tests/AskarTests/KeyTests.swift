@@ -3,8 +3,8 @@ import XCTest
 
 final class KeyTests: XCTestCase {
     func testAesCbcHmac() throws {
-        let key = try Key.generate(alg: KeyAlg.A128CBC_HS256)
-        XCTAssertEqual(try key.algorithm, KeyAlg.A128CBC_HS256)
+        let key = try Key.generate(alg: .A128CBC_HS256)
+        XCTAssertEqual(try key.algorithm, .A128CBC_HS256)
 
         let data = "test message".data(using: .utf8)!
         let nonce = try key.aeadRandomNonce()
@@ -17,8 +17,8 @@ final class KeyTests: XCTestCase {
     }
 
     func testAesGcm() throws {
-        let key = try Key.generate(alg: KeyAlg.A128GCM)
-        XCTAssertEqual(try key.algorithm, KeyAlg.A128GCM)
+        let key = try Key.generate(alg: .A128GCM)
+        XCTAssertEqual(try key.algorithm, .A128GCM)
 
         let data = "test message".data(using: .utf8)!
         let nonce = try key.aeadRandomNonce()
@@ -31,7 +31,7 @@ final class KeyTests: XCTestCase {
     }
 
     func testBlsKeygen() throws {
-        let key = try Key.fromSeed("testseed000000000000000000000001", alg: KeyAlg.BLS12_381_G1G2, method: SeedMethod.BlsKeyGen)
+        let key = try Key.fromSeed("testseed000000000000000000000001", alg: .BLS12_381_G1G2, method: .BlsKeyGen)
         XCTAssertEqual(try key.getJwkPublic(alg: KeyAlg.BLS12_381_G1),
                        "{\"crv\":\"BLS12381_G1\",\"kty\":\"OKP\",\"x\":" +
                        "\"h56eYI8Qkq5hitICb-ik8wRTzcn6Fd4iY8aDNVc9q1xoPS3lh4DB_B4wNtar1HrV\"}")
@@ -47,8 +47,8 @@ final class KeyTests: XCTestCase {
     }
 
     func testEd25519() throws {
-        let key = try Key.generate(alg: KeyAlg.ED25519)
-        XCTAssertEqual(try key.algorithm, KeyAlg.ED25519)
+        let key = try Key.generate(alg: .ED25519)
+        XCTAssertEqual(try key.algorithm, .ED25519)
         let message = "test message".data(using: .utf8)!
         let sig = try key.signMessage(message)
         XCTAssertTrue(try key.verifySignature(message: message, signature: sig))
