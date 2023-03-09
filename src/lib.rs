@@ -1,7 +1,7 @@
 //! Secure storage designed for Hyperledger Aries agents
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![deny(missing_docs, missing_debug_implementations, rust_2018_idioms)]
+// #![deny(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 
 #[macro_use]
 mod error;
@@ -50,9 +50,12 @@ pub mod kms;
 mod protect;
 pub use protect::{
     generate_raw_store_key,
+    askar_generate_raw_store_key_ffi,
     kdf::{Argon2Level, KdfMethod},
     PassKey, StoreKeyMethod,
 };
 
 mod storage;
 pub use storage::{Entry, EntryTag, Scan, Store, TagFilter};
+
+uniffi::include_scaffolding!("askar");

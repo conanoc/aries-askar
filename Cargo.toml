@@ -13,6 +13,10 @@ repository = "https://github.com/hyperledger/aries-askar/"
 categories = ["cryptography", "database"]
 keywords = ["hyperledger", "aries", "ssi", "verifiable", "credentials"]
 
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi/uniffi-bindgen.rs"
+
 [lib]
 name = "aries_askar"
 path = "src/lib.rs"
@@ -36,6 +40,9 @@ pg_test = ["postgres"]
 
 [dev-dependencies]
 hex-literal = "0.3"
+
+[build-dependencies]
+uniffi = { version = "0.23.0", features = [ "build", "cli"] }
 
 [dependencies]
 arc-swap = "1.6"
@@ -62,6 +69,8 @@ serde_cbor = "0.11"
 serde_json = "1.0"
 sha2 = "0.10"
 tokio = { version = "1.5", features = ["time"] }
+uniffi = { version = "0.23.0" }
+uniffi_bindgen = "0.23.0"
 url = { version = "2.1", default-features = false }
 uuid = { version = "0.8", features = ["v4"] }
 zeroize = "1.4"

@@ -1,0 +1,18 @@
+
+[Error]
+enum ErrorKind {
+    "Backend",
+    "Busy",
+    "Duplicate",
+    "Encryption",
+    "Input",
+    "NotFound",
+    "Unexpected",
+    "Unsupported",
+    "Custom",
+};
+
+namespace askar {
+    [Throws=ErrorKind]
+    string askar_generate_raw_store_key_ffi(sequence<u8> seed);
+};
