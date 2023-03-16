@@ -13,7 +13,7 @@ mod profile_key;
 pub use self::profile_key::ProfileKey;
 
 mod store_key;
-pub use self::store_key::{generate_raw_store_key, askar_generate_raw_store_key_ffi, StoreKey, StoreKeyMethod, StoreKeyReference};
+pub use self::store_key::{generate_raw_store_key, StoreKey, StoreKeyMethod, StoreKeyReference};
 
 use crate::{
     crypto::buffer::SecretBytes,

@@ -45,12 +45,14 @@ extern crate serde_json;
 #[cfg(feature = "ffi")]
 mod ffi;
 
+#[cfg(feature = "unffi")]
+pub mod uffi;
+
 pub mod kms;
 
 mod protect;
 pub use protect::{
     generate_raw_store_key,
-    askar_generate_raw_store_key_ffi,
     kdf::{Argon2Level, KdfMethod},
     PassKey, StoreKeyMethod,
 };
@@ -58,4 +60,5 @@ pub use protect::{
 mod storage;
 pub use storage::{Entry, EntryTag, Scan, Store, TagFilter};
 
+#[cfg(feature = "unffi")]
 uniffi::include_scaffolding!("askar");

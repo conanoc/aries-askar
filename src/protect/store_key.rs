@@ -31,14 +31,6 @@ pub fn generate_raw_store_key(seed: Option<&[u8]>) -> Result<PassKey<'static>, E
     Ok(key.to_passkey())
 }
 
-pub fn askar_generate_raw_store_key_ffi(seed: Vec<u8>) -> Result<String, ErrorKind> {
-    let key = generate_raw_store_key(Some(&seed));
-    match key {
-        Ok(key) => Ok(key.to_string()),
-        Err(e) => Err(e.kind()),
-    }
-}
-
 pub fn parse_raw_store_key(raw_key: &str) -> Result<StoreKey, Error> {
     ArrayKey::<<StoreKeyType as KeyMeta>::KeySize>::temp(|key| {
         let key_len = bs58::decode(raw_key)
