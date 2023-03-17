@@ -1,3 +1,3 @@
 fn main() {
-    uniffi::generate_scaffolding("./uniffi/askar.udl").unwrap();
+    uniffi::generate_scaffolding("./src/askar.udl").unwrap();
 }

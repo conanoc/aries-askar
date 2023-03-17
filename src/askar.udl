@@ -13,9 +13,10 @@ enum ErrorCode {
     "Custom",
 };
 
-interface Store {
-    [Throws=ErrorCode]
-    string generate_raw_store_key(string seed? = null);
+interface AskarStore {
 };
 
-namespace askar {};
+namespace askar {
+    [Throws=ErrorCode]
+    string askar_generate_raw_store_key(optional string? seed = null);
+};

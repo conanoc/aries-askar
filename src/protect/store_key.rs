@@ -10,7 +10,6 @@ use crate::{
         repr::{KeyGen, KeyMeta, KeySecretBytes},
     },
     error::Error,
-    error::ErrorKind,
 };
 
 pub const PREFIX_KDF: &'static str = "kdf";

@@ -61,4 +61,11 @@ mod storage;
 pub use storage::{Entry, EntryTag, Scan, Store, TagFilter};
 
 #[cfg(feature = "unffi")]
+pub use uffi::{
+    store::askar_generate_raw_store_key,
+    store::AskarStore,
+    error::ErrorCode,
+};
+
+#[cfg(feature = "unffi")]
 uniffi::include_scaffolding!("askar");

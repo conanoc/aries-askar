@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use crate::error::{Error, ErrorKind};
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -27,5 +29,11 @@ impl From<Error> for ErrorCode {
             ErrorKind::Unsupported => ErrorCode::Unsupported(err.to_string()),
             ErrorKind::Custom => ErrorCode::Custom(err.to_string()),
         }
+    }
+}
+
+impl Display for ErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
