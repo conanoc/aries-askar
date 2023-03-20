@@ -45,7 +45,7 @@ extern crate serde_json;
 #[cfg(feature = "ffi")]
 mod ffi;
 
-#[cfg(feature = "unffi")]
+#[cfg(feature = "uffi")]
 pub mod uffi;
 
 pub mod kms;
@@ -60,18 +60,18 @@ pub use protect::{
 mod storage;
 pub use storage::{Entry, EntryTag, Scan, Store, TagFilter};
 
-#[cfg(feature = "unffi")]
+#[cfg(feature = "uffi")]
 pub use uffi::{
     store::askar_generate_raw_store_key,
     store::AskarStore,
     error::ErrorCode,
 };
 
-#[cfg(feature = "unffi")]
+#[cfg(feature = "uffi")]
 mod uniffi_types {
     pub(crate) use crate::uffi::error::ErrorCode;
     pub(crate) use crate::uffi::store::AskarStore;
 }
 
-#[cfg(feature = "unffi")]
+#[cfg(feature = "uffi")]
 uniffi::include_scaffolding!("askar");
