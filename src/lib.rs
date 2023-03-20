@@ -68,4 +68,10 @@ pub use uffi::{
 };
 
 #[cfg(feature = "unffi")]
+mod uniffi_types {
+    pub(crate) use crate::uffi::error::ErrorCode;
+    pub(crate) use crate::uffi::store::AskarStore;
+}
+
+#[cfg(feature = "unffi")]
 uniffi::include_scaffolding!("askar");

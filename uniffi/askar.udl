@@ -1,0 +1,5 @@
+
+interface AskarStore {
+};
+
+namespace aries_askar {};
