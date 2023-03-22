@@ -1,4 +1,5 @@
 use std::sync::{Arc, RwLock};
+use std::str::FromStr;
 use crate::{
     backend::{
         any::{AnySession, AnyStore},
@@ -107,7 +108,7 @@ impl AskarStore {
         offset: Option<i64>,
         limit: Option<i64>,
     ) -> Result<Arc<AskarScan>, ErrorCode> {
-        let tag_filter = tag_filter.map(TagFilter::from_str).transpose()?;
+        let tag_filter = tag_filter.as_deref().map(TagFilter::from_str).transpose()?;
         let scan = self.store.read().unwrap().as_ref().unwrap().scan(
             profile,
             categogy,

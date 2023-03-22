@@ -14,17 +14,17 @@ impl AskarEntry {
 #[uniffi::export]
 impl AskarEntry {
     pub fn category(&self) -> String {
-        self.entry.category
+        self.entry.category.clone()
     }
 
     pub fn name(&self) -> String {
-        self.entry.name
+        self.entry.name.clone()
     }
 
     pub fn tags(&self) -> HashMap<String, String> {
         let mut map = HashMap::new();
-        for tag in self.entry.tags {
-            map.insert(tag.name, tag.value);
+        for tag in &self.entry.tags {
+            map.insert(tag.name().to_string(), tag.value().to_string());
         }
         map
     }
