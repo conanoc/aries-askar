@@ -4,13 +4,13 @@ use crate::{
         any::{AnySession, AnyStore},
         ManageBackend,
     },
-    uffi::error::ErrorCode,
+    uffi::{error::ErrorCode, scan::AskarScan},
     protect::{generate_raw_store_key, PassKey, StoreKeyMethod},
-    storage::{Entry, EntryOperation, EntryTagSet, Scan, TagFilter},
+    storage::TagFilter,
 };
 
 pub struct AskarStore {
-    store: RwLock<Option<AnyStore>>,
+    store: RwLock<Option<AnyStore>>,    // Option is used to allow for the store to be closed
 }
 
 #[uniffi::export]
@@ -99,5 +99,22 @@ impl AskarStore {
         Ok(())
     }
 
-    // scan
+    pub async fn scan(
+        &self,
+        profile: Option<String>,
+        categogy: String,
+        tag_filter: Option<String>,
+        offset: Option<i64>,
+        limit: Option<i64>,
+    ) -> Result<Arc<AskarScan>, ErrorCode> {
+        let tag_filter = tag_filter.map(TagFilter::from_str).transpose()?;
+        let scan = self.store.read().unwrap().as_ref().unwrap().scan(
+            profile,
+            categogy,
+            tag_filter,
+            offset,
+            limit,
+        ).await?;
+        Ok(Arc::new(AskarScan::new(scan)))
+    }
 }

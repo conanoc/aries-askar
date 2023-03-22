@@ -1,18 +1,18 @@
-use std::sync::Arc;
-use crate::{
-    storage::{Entry, EntryOperation, EntryTagSet, Scan, TagFilter},
-};
+use std::collections::HashMap;
+use crate::storage::Entry;
 
 pub struct AskarEntry {
     entry: Entry,
 }
 
-#[uniffi::export]
 impl AskarEntry {
     pub fn new(entry: Entry) -> Self {
         Self { entry }
     }
+}
 
+#[uniffi::export]
+impl AskarEntry {
     pub fn category(&self) -> String {
         self.entry.category
     }

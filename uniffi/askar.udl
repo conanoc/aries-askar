@@ -1,5 +1,6 @@
 
-interface AskarStore {
-};
+interface AskarStore {};
+interface AskarScan {};
+interface AskarEntry {};
 
 namespace aries_askar {};

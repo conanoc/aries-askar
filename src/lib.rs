@@ -65,12 +65,13 @@ pub use uffi::{
     store::askar_generate_raw_store_key,
     store::AskarStore,
     error::ErrorCode,
+    entry::AskarEntry,
+    scan::AskarScan,
 };
 
 #[cfg(feature = "uffi")]
 mod uniffi_types {
-    pub(crate) use crate::uffi::error::ErrorCode;
-    pub(crate) use crate::uffi::store::AskarStore;
+    pub(crate) use crate::uffi::{error::ErrorCode, store::AskarStore, entry::AskarEntry, scan::AskarScan};
 }
 
 #[cfg(feature = "uffi")]
