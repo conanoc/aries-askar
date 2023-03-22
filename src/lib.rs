@@ -46,7 +46,7 @@ extern crate serde_json;
 mod ffi;
 
 #[cfg(feature = "uffi")]
-pub mod uffi;
+mod uffi;
 
 pub mod kms;
 
