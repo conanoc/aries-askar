@@ -1,6 +1,13 @@
 
+enum EntryOperation {
+    "Insert",
+    "Replace",
+    "Remove",
+};
+
 interface AskarStore {};
 interface AskarScan {};
 interface AskarEntry {};
+interface AskarSession {};
 
 namespace aries_askar {};

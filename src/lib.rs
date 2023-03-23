@@ -58,7 +58,7 @@ pub use protect::{
 };
 
 mod storage;
-pub use storage::{Entry, EntryTag, Scan, Store, TagFilter};
+pub use storage::{Entry, EntryOperation, EntryTag, Scan, Store, TagFilter};
 
 #[cfg(feature = "uffi")]
 pub use uffi::{
@@ -67,11 +67,13 @@ pub use uffi::{
     error::ErrorCode,
     entry::AskarEntry,
     scan::AskarScan,
+    session::AskarSession,
 };
 
 #[cfg(feature = "uffi")]
 mod uniffi_types {
-    pub(crate) use crate::uffi::{error::ErrorCode, store::AskarStore, entry::AskarEntry, scan::AskarScan};
+    pub(crate) use crate::storage::EntryOperation;
+    pub(crate) use crate::uffi::{error::ErrorCode, store::AskarStore, entry::AskarEntry, scan::AskarScan, session::AskarSession};
 }
 
 #[cfg(feature = "uffi")]
