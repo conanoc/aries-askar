@@ -2,13 +2,19 @@ use std::sync::{Arc, RwLock};
 use std::str::FromStr;
 use crate::{
     backend::{
-        any::{AnySession, AnyStore},
+        any::AnyStore,
         ManageBackend,
     },
     uffi::{error::ErrorCode, scan::AskarScan},
     protect::{generate_raw_store_key, PassKey, StoreKeyMethod},
     storage::TagFilter,
 };
+
+macro_rules! STORE_CLOSED_ERROR {
+    () => {
+        ErrorCode::Unexpected { message: String::from("Store is already closed") }
+    };
+}
 
 pub struct AskarStore {
     store: RwLock<Option<AnyStore>>,    // Option is used to allow for the store to be closed
@@ -71,16 +77,37 @@ pub async fn askar_store_remove(spec_uri: String) -> Result<bool, ErrorCode> {
 #[uniffi::export]
 impl AskarStore {
     pub async fn create_profile(&self, profile: Option<String>) -> Result<String, ErrorCode> {
-        let name = self.store.read().unwrap().as_ref().unwrap().create_profile(profile).await?;
+        let name = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .create_profile(profile)
+            .await?;
         Ok(name)
     }
 
-    pub fn get_profile_name(&self) -> String {
-        self.store.read().unwrap().as_ref().unwrap().get_profile_name().to_string()
+    pub fn get_profile_name(&self) -> Result<String, ErrorCode> {
+        let name = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .get_profile_name().to_string();
+        Ok(name)
     }
 
     pub async fn remove_profile(&self, profile: String) -> Result<bool, ErrorCode> {
-        let removed = self.store.read().unwrap().as_ref().unwrap().remove_profile(profile).await?;
+        let removed = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .remove_profile(profile)
+            .await?;
         Ok(removed)
     }
 
@@ -90,13 +117,22 @@ impl AskarStore {
             None => StoreKeyMethod::default()
         };
         let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
-        self.store.write().unwrap().as_mut().unwrap().rekey(key_method, pass_key).await?;
+        self
+            .store
+            .write()
+            .unwrap()
+            .as_mut()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .rekey(key_method, pass_key)
+            .await?;
         Ok(())
     }
 
     pub async fn close(&self) -> Result<(), ErrorCode> {
         let store = self.store.write().unwrap().take();
-        store.unwrap().close().await?;
+        store
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .close().await?;
         Ok(())
     }
 
@@ -109,13 +145,20 @@ impl AskarStore {
         limit: Option<i64>,
     ) -> Result<Arc<AskarScan>, ErrorCode> {
         let tag_filter = tag_filter.as_deref().map(TagFilter::from_str).transpose()?;
-        let scan = self.store.read().unwrap().as_ref().unwrap().scan(
-            profile,
-            categogy,
-            tag_filter,
-            offset,
-            limit,
-        ).await?;
+        let scan = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .scan(
+                profile,
+                categogy,
+                tag_filter,
+                offset,
+                limit,
+            )
+            .await?;
         Ok(Arc::new(AskarScan::new(scan)))
     }
 }
