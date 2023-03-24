@@ -5,9 +5,11 @@ enum EntryOperation {
     "Remove",
 };
 
-interface AskarStore {};
-interface AskarScan {};
 interface AskarEntry {};
+interface AskarKeyEntry {};
+interface AskarLocalKey {};
+interface AskarScan {};
 interface AskarSession {};
+interface AskarStore {};
 
 namespace aries_askar {};
