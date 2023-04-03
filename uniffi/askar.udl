@@ -7,9 +7,12 @@ enum EntryOperation {
 
 interface AskarEntry {};
 interface AskarKeyEntry {};
-interface AskarLocalKey {};
 interface AskarScan {};
 interface AskarSession {};
 interface AskarStore {};
+interface AskarLocalKey {};
+interface LocalKeyFactory {
+    constructor();
+};
 
 namespace aries_askar {};

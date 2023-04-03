@@ -66,7 +66,7 @@ pub use uffi::{
     store::AskarStore,
     error::ErrorCode,
     entry::{AskarEntry, AskarKeyEntry},
-    key::{AskarLocalKey, AskarKeyAlg, SeedMethod},
+    key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory},
     scan::AskarScan,
     session::AskarSession,
 };
@@ -78,7 +78,7 @@ mod uniffi_types {
         store::AskarStore,
         error::ErrorCode,
         entry::{AskarEntry, AskarKeyEntry},
-        key::{AskarLocalKey, AskarKeyAlg, SeedMethod},
+        key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory},
         scan::AskarScan,
         session::AskarSession,
     };
