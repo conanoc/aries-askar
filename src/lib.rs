@@ -66,23 +66,10 @@ pub use uffi::{
     store::AskarStore,
     error::ErrorCode,
     entry::{AskarEntry, AskarKeyEntry},
-    key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory},
+    key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory, EncryptedBuffer},
     scan::AskarScan,
     session::AskarSession,
 };
-
-#[cfg(feature = "uffi")]
-mod uniffi_types {
-    pub(crate) use crate::storage::EntryOperation;
-    pub(crate) use crate::uffi::{
-        store::AskarStore,
-        error::ErrorCode,
-        entry::{AskarEntry, AskarKeyEntry},
-        key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory},
-        scan::AskarScan,
-        session::AskarSession,
-    };
-}
 
 #[cfg(feature = "uffi")]
 uniffi::include_scaffolding!("askar");

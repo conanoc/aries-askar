@@ -11,6 +11,7 @@ interface AskarScan {};
 interface AskarSession {};
 interface AskarStore {};
 interface AskarLocalKey {};
+interface EncryptedBuffer {};
 interface LocalKeyFactory {
     constructor();
 };

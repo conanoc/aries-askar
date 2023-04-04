@@ -1,7 +1,7 @@
 use std::{convert::Into, convert::From, sync::Arc};
 use crate::{
     crypto::alg::{KeyAlg, AesTypes, BlsCurves, Chacha20Types, EcCurves},
-    kms::LocalKey,
+    kms::{LocalKey, Encrypted},
     uffi::error::ErrorCode,
 };
 
@@ -78,6 +78,35 @@ impl Into<&str> for SeedMethod {
         match self {
             SeedMethod::BlsKeyGen => "bls_keygen",
         }
+    }
+}
+
+#[derive(uniffi::Record)]
+pub struct AeadParams {
+    nonce_length: i32,
+    tag_length: i32,
+}
+
+pub struct EncryptedBuffer {
+    enc: Encrypted,
+}
+
+#[uniffi::export]
+impl EncryptedBuffer {
+    pub fn ciphertext(&self) -> Vec<u8> {
+        self.enc.ciphertext().to_vec()
+    }
+
+    pub fn nonce(&self) -> Vec<u8> {
+        self.enc.nonce().to_vec()
+    }
+
+    pub fn tag(&self) -> Vec<u8> {
+        self.enc.tag().to_vec()
+    }
+
+    pub fn ciphertext_tag(&self) -> Vec<u8> {
+        self.enc.buffer[0..(self.enc.nonce_pos)].to_vec()
     }
 }
 
@@ -167,5 +196,48 @@ impl AskarLocalKey {
         Ok(Arc::new(AskarLocalKey { key }))
     }
 
-    // TODO: aead_params
+    pub fn aead_params(&self) -> Result<AeadParams, ErrorCode> {
+        let params = self.key.aead_params()?;
+        Ok(AeadParams {
+            nonce_length: params.nonce_length as i32,
+            tag_length: params.tag_length as i32,
+        })
+    }
+
+    pub fn aead_padding(&self, msg_len: i32) -> i32 {
+        self.key.aead_padding(msg_len as usize) as i32
+    }
+
+    pub fn aead_random_nonce(&self) -> Result<Vec<u8>, ErrorCode> {
+        Ok(self.key.aead_random_nonce()?)
+    }
+
+    pub fn aead_encrypt(&self, msg: Vec<u8>, nonce: Vec<u8>, aad: Vec<u8>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
+        Ok(Arc::new(EncryptedBuffer {
+            enc: self.key.aead_encrypt(&msg, &nonce, &aad)?,
+        }))
+    }
+
+    pub fn aead_decrypt(&self, ciphertext: Vec<u8>, tag: Vec<u8>, nonce: Vec<u8>, aad: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
+        Ok(self.key.aead_decrypt((ciphertext.as_slice(), tag.as_slice()), &nonce, &aad)?.to_vec())
+    }
+
+    pub fn sign_message(&self, message: Vec<u8>, sig_type: Option<String>) -> Result<Vec<u8>, ErrorCode> {
+        Ok(self.key.sign_message(&message, sig_type.as_deref())?)
+    }
+
+    pub fn verify_signature(&self, message: Vec<u8>, signature: Vec<u8>, sig_type: Option<String>) -> Result<bool, ErrorCode> {
+        Ok(self.key.verify_signature(&message, &signature, sig_type.as_deref())?)
+    }
+
+    pub fn wrap_key(&self, key: Arc<AskarLocalKey>, nonce: Vec<u8>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
+        Ok(Arc::new(EncryptedBuffer {
+            enc: self.key.wrap_key(&key.key, &nonce)?,
+        }))
+    }
+
+    pub fn unwrap_key(&self, alg: AskarKeyAlg, ciphertext: Vec<u8>, tag: Vec<u8>, nonce: Vec<u8>) -> Result<Arc<AskarLocalKey>, ErrorCode> {
+        let key = self.key.unwrap_key(alg.into(), (ciphertext.as_slice(), tag.as_slice()), &nonce)?;
+        Ok(Arc::new(AskarLocalKey { key }))
+    }
 }
