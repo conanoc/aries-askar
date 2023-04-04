@@ -5,7 +5,7 @@ use crate::{
         any::AnyStore,
         ManageBackend,
     },
-    uffi::{error::ErrorCode, scan::AskarScan},
+    uffi::{error::ErrorCode, scan::AskarScan, session::AskarSession},
     protect::{generate_raw_store_key, PassKey, StoreKeyMethod},
     storage::TagFilter,
 };
@@ -160,5 +160,17 @@ impl AskarStore {
             )
             .await?;
         Ok(Arc::new(AskarScan::new(scan)))
+    }
+
+    pub async fn session(&self, profile: Option<String>) -> Result<Arc<AskarSession>, ErrorCode> {
+        let session = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .session(profile)
+            .await?;
+        Ok(Arc::new(AskarSession::new(session)))
     }
 }

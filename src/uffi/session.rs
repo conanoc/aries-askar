@@ -1,10 +1,11 @@
-use std::str::FromStr;
-use std::sync::{Arc, RwLock};
-use crate::any::AnySession;
-use crate::storage::EntryTagSet;
+use std::{
+    str::FromStr,
+    sync::{Arc, RwLock}
+};
 use crate::{
-    uffi::{error::ErrorCode, entry::AskarEntry},
-    storage::{Entry, EntryOperation, Scan, TagFilter},
+    any::AnySession,
+    uffi::{error::ErrorCode, entry::AskarEntry, entry::AskarKeyEntry, key::AskarLocalKey},
+    storage::{EntryOperation, TagFilter, EntryTagSet},
 };
 
 pub struct AskarSession {
@@ -88,6 +89,108 @@ impl AskarSession {
             .write()
             .unwrap()
             .update(operation, &category, &name, Some(&value), tags.as_deref(), expiry_ms)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn remove_all(
+        &self,
+        category: String,
+        tag_filter: Option<String>,
+    ) -> Result<i64, ErrorCode> {
+        Ok(self
+            .session
+            .write()
+            .unwrap()
+            .remove_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
+            .await?)
+    }
+
+    pub async fn insert_key(
+        &self,
+        name: String,
+        key: Arc<AskarLocalKey>,
+        metadata: Option<String>,
+        tags: Option<String>,
+        expiry_ms: Option<i64>,
+    ) -> Result<(), ErrorCode> {
+        let tags = if let Some(tags) = tags {
+            Some(
+                serde_json::from_str::<EntryTagSet<'static>>(&tags)
+                    .map_err(err_map!("Error decoding tags"))?
+                    .into_vec(),
+            )
+        } else {
+            None
+        };
+        self.session
+            .write()
+            .unwrap()
+            .insert_key(&name, &key.key, metadata.as_deref(), tags.as_deref(), expiry_ms)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn fetch_key(
+        &self,
+        name: String,
+        for_update: bool,
+    ) -> Result<Option<Arc<AskarKeyEntry>>, ErrorCode> {
+        let key = self
+            .session
+            .write()
+            .unwrap()
+            .fetch_key(&name, for_update)
+            .await?;
+        Ok(key.map(|entry| Arc::new(AskarKeyEntry::new(entry))))
+    }
+
+    pub async fn fetch_all_keys(
+        &self,
+        algorithm: Option<String>,
+        thumbprint: Option<String>,
+        tag_filter: Option<String>,
+        limit: Option<i64>,
+        for_update: bool,
+    ) -> Result<Vec<Arc<AskarKeyEntry>>, ErrorCode> {
+        let tag_filter = tag_filter.as_deref().map(TagFilter::from_str).transpose()?;
+        let keys = self
+            .session
+            .write()
+            .unwrap()
+            .fetch_all_keys(algorithm.as_deref(), thumbprint.as_deref(), tag_filter, limit, for_update)
+            .await?;
+        Ok(keys
+            .into_iter()
+            .map(|entry| Arc::new(AskarKeyEntry::new(entry)))
+            .collect())
+    }
+
+    pub async fn remove_key(&self, name: String) -> Result<(), ErrorCode> {
+        self.session.write().unwrap().remove_key(&name).await?;
+        Ok(())
+    }
+
+    pub async fn update_key(
+        &self,
+        name: String,
+        metadata: Option<String>,
+        tags: Option<String>,
+        expiry_ms: Option<i64>,
+    ) -> Result<(), ErrorCode> {
+        let tags = if let Some(tags) = tags {
+            Some(
+                serde_json::from_str::<EntryTagSet<'static>>(&tags)
+                    .map_err(err_map!("Error decoding tags"))?
+                    .into_vec(),
+            )
+        } else {
+            None
+        };
+        self.session
+            .write()
+            .unwrap()
+            .update_key(&name, metadata.as_deref(), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
     }
