@@ -8,6 +8,23 @@ use crate::{
     storage::{EntryOperation, TagFilter, EntryTagSet},
 };
 
+#[derive(uniffi::Enum)]
+pub enum AskarEntryOperation {
+    Insert,
+    Replace,
+    Remove,
+}
+
+impl Into<EntryOperation> for AskarEntryOperation {
+    fn into(self) -> EntryOperation {
+        match self {
+            AskarEntryOperation::Insert => EntryOperation::Insert,
+            AskarEntryOperation::Replace => EntryOperation::Replace,
+            AskarEntryOperation::Remove => EntryOperation::Remove,
+        }
+    }
+}
+
 pub struct AskarSession {
     session: RwLock<AnySession>,
 }
@@ -69,7 +86,7 @@ impl AskarSession {
 
     pub async fn update(
         &self,
-        operation: EntryOperation,
+        operation: AskarEntryOperation,
         category: String,
         name: String,
         value: Vec<u8>,
@@ -88,7 +105,7 @@ impl AskarSession {
         self.session
             .write()
             .unwrap()
-            .update(operation, &category, &name, Some(&value), tags.as_deref(), expiry_ms)
+            .update(operation.into(), &category, &name, Some(&value), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
     }

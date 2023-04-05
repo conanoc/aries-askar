@@ -1,10 +1,3 @@
-
-enum EntryOperation {
-    "Insert",
-    "Replace",
-    "Remove",
-};
-
 interface AskarEntry {};
 interface AskarKeyEntry {};
 interface AskarScan {};

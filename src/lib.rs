@@ -67,7 +67,7 @@ pub use uffi::{
     entry::{AskarEntry, AskarKeyEntry},
     key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory, EncryptedBuffer},
     scan::AskarScan,
-    session::AskarSession,
+    session::{AskarSession, AskarEntryOperation},
     store::{AskarStore, AskarStoreManager},
 };
 
