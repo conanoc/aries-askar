@@ -62,13 +62,13 @@ pub use storage::{Entry, EntryOperation, EntryTag, Scan, Store, TagFilter};
 
 #[cfg(feature = "uffi")]
 pub use uffi::{
-    store::askar_generate_raw_store_key,
-    store::AskarStore,
+    crypto::{AskarCrypto, AskarEcdhEs, AskarEcdh1PU},
     error::ErrorCode,
     entry::{AskarEntry, AskarKeyEntry},
     key::{AskarLocalKey, AskarKeyAlg, SeedMethod, LocalKeyFactory, EncryptedBuffer},
     scan::AskarScan,
     session::AskarSession,
+    store::{AskarStore, AskarStoreManager},
 };
 
 #[cfg(feature = "uffi")]

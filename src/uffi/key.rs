@@ -212,14 +212,14 @@ impl AskarLocalKey {
         Ok(self.key.aead_random_nonce()?)
     }
 
-    pub fn aead_encrypt(&self, msg: Vec<u8>, nonce: Vec<u8>, aad: Vec<u8>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
+    pub fn aead_encrypt(&self, message: Vec<u8>, nonce: Option<Vec<u8>>, aad: Option<Vec<u8>>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
         Ok(Arc::new(EncryptedBuffer {
-            enc: self.key.aead_encrypt(&msg, &nonce, &aad)?,
+            enc: self.key.aead_encrypt(&message, &nonce.unwrap_or_default(), &aad.unwrap_or_default())?,
         }))
     }
 
-    pub fn aead_decrypt(&self, ciphertext: Vec<u8>, tag: Vec<u8>, nonce: Vec<u8>, aad: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
-        Ok(self.key.aead_decrypt((ciphertext.as_slice(), tag.as_slice()), &nonce, &aad)?.to_vec())
+    pub fn aead_decrypt(&self, ciphertext: Vec<u8>, tag: Option<Vec<u8>>, nonce: Vec<u8>, aad: Option<Vec<u8>>) -> Result<Vec<u8>, ErrorCode> {
+        Ok(self.key.aead_decrypt((ciphertext.as_slice(), tag.unwrap_or_default().as_slice()), &nonce, &aad.unwrap_or_default())?.to_vec())
     }
 
     pub fn sign_message(&self, message: Vec<u8>, sig_type: Option<String>) -> Result<Vec<u8>, ErrorCode> {
@@ -230,14 +230,18 @@ impl AskarLocalKey {
         Ok(self.key.verify_signature(&message, &signature, sig_type.as_deref())?)
     }
 
-    pub fn wrap_key(&self, key: Arc<AskarLocalKey>, nonce: Vec<u8>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
+    pub fn wrap_key(&self, key: Arc<AskarLocalKey>, nonce: Option<Vec<u8>>) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
         Ok(Arc::new(EncryptedBuffer {
-            enc: self.key.wrap_key(&key.key, &nonce)?,
+            enc: self.key.wrap_key(&key.key, &nonce.unwrap_or_default())?,
         }))
     }
 
-    pub fn unwrap_key(&self, alg: AskarKeyAlg, ciphertext: Vec<u8>, tag: Vec<u8>, nonce: Vec<u8>) -> Result<Arc<AskarLocalKey>, ErrorCode> {
-        let key = self.key.unwrap_key(alg.into(), (ciphertext.as_slice(), tag.as_slice()), &nonce)?;
+    pub fn unwrap_key(&self, alg: AskarKeyAlg, ciphertext: Vec<u8>, tag: Option<Vec<u8>>, nonce: Option<Vec<u8>>) -> Result<Arc<AskarLocalKey>, ErrorCode> {
+        let key = self.key.unwrap_key(
+            alg.into(),
+            (ciphertext.as_slice(), tag.unwrap_or_default().as_slice()),
+            &nonce.unwrap_or_default()
+        )?;
         Ok(Arc::new(AskarLocalKey { key }))
     }
 }

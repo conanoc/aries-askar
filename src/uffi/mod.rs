@@ -4,3 +4,4 @@ pub mod key;
 pub mod scan;
 pub mod session;
 pub mod store;
+pub mod crypto;

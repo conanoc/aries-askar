@@ -16,62 +16,71 @@ macro_rules! STORE_CLOSED_ERROR {
     };
 }
 
+pub struct AskarStoreManager {}
+
+impl AskarStoreManager {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[uniffi::export]
+impl AskarStoreManager {
+    pub fn generate_raw_store_key(&self, seed: Option<String>) -> Result<String, ErrorCode> {
+        let key = generate_raw_store_key(seed.as_ref().map(|s| s.as_bytes()))?;
+        Ok(key.to_string())
+    }
+
+    pub async fn provision(
+        &self,
+        spec_uri: String,
+        key_method: Option<String>,
+        pass_key: Option<String>,
+        profile: Option<String>,
+        recreate: bool,
+    ) -> Result<Arc<AskarStore>, ErrorCode> {
+        let key_method = match key_method {
+            Some(method) => StoreKeyMethod::parse_uri(&method)?,
+            None => StoreKeyMethod::default()
+        };
+        let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
+        let store = spec_uri.provision_backend(
+            key_method,
+            pass_key,
+            profile.as_deref(),
+            recreate,
+        ).await?;
+        Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
+    }
+
+    pub async fn open(
+        &self,
+        spec_uri: String,
+        key_method: Option<String>,
+        pass_key: Option<String>,
+        profile: Option<String>,
+    ) -> Result<Arc<AskarStore>, ErrorCode> {
+        let key_method = match key_method {
+            Some(method) => Some(StoreKeyMethod::parse_uri(&method)?),
+            None => None
+        };
+        let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
+        let store = spec_uri.open_backend(
+            key_method,
+            pass_key,
+            profile.as_deref(),
+        ).await?;
+        Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
+    }
+
+    pub async fn remove(&self, spec_uri: String) -> Result<bool, ErrorCode> {
+        let removed = spec_uri.remove_backend().await?;
+        Ok(removed)
+    }
+}
+
 pub struct AskarStore {
     store: RwLock<Option<AnyStore>>,    // Option is used to allow for the store to be closed
-}
-
-#[uniffi::export]
-pub fn askar_generate_raw_store_key(seed: Option<String>) -> Result<String, ErrorCode> {
-    let key = generate_raw_store_key(seed.as_ref().map(|s| s.as_bytes()))?;
-    Ok(key.to_string())
-}
-
-#[uniffi::export]
-pub async fn askar_store_provision(
-    spec_uri: String,
-    key_method: Option<String>,
-    pass_key: Option<String>,
-    profile: Option<String>,
-    recreate: bool,
-) -> Result<Arc<AskarStore>, ErrorCode> {
-    let key_method = match key_method {
-        Some(method) => StoreKeyMethod::parse_uri(&method)?,
-        None => StoreKeyMethod::default()
-    };
-    let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
-    let store = spec_uri.provision_backend(
-        key_method,
-        pass_key,
-        profile.as_deref(),
-        recreate,
-    ).await?;
-    Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
-}
-
-#[uniffi::export]
-pub async fn askar_store_open(
-    spec_uri: String,
-    key_method: Option<String>,
-    pass_key: Option<String>,
-    profile: Option<String>,
-) -> Result<Arc<AskarStore>, ErrorCode> {
-    let key_method = match key_method {
-        Some(method) => Some(StoreKeyMethod::parse_uri(&method)?),
-        None => None
-    };
-    let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
-    let store = spec_uri.open_backend(
-        key_method,
-        pass_key,
-        profile.as_deref(),
-    ).await?;
-    Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
-}
-
-#[uniffi::export]
-pub async fn askar_store_remove(spec_uri: String) -> Result<bool, ErrorCode> {
-    let removed = spec_uri.remove_backend().await?;
-    Ok(removed)
 }
 
 #[uniffi::export]
