@@ -83,6 +83,25 @@ impl AskarEcdhEs {
 
 #[uniffi::export]
 impl AskarEcdhEs {
+    pub fn derive_key(
+        &self,
+        enc_alg: AskarKeyAlg,
+        ephemeral_key: Arc<AskarLocalKey>,
+        receiver_key: Arc<AskarLocalKey>,
+        receive: bool,
+    ) -> Result<Arc<AskarLocalKey>, ErrorCode> {
+        let key = derive_key_ecdh_es(
+            enc_alg.into(),
+            &ephemeral_key.key,
+            &receiver_key.key,
+            &self.alg_id,
+            &self.apu,
+            &self.apv,
+            receive,
+        )?;
+        Ok(Arc::new(AskarLocalKey { key }))
+    }
+
     pub fn encrypt_direct(
         &self,
         enc_alg: AskarKeyAlg,
@@ -194,6 +213,29 @@ impl AskarEcdh1PU {
 
 #[uniffi::export]
 impl AskarEcdh1PU {
+    pub fn derive_key(
+        &self,
+        enc_alg: AskarKeyAlg,
+        ephemeral_key: Arc<AskarLocalKey>,
+        sender_key: Arc<AskarLocalKey>,
+        receiver_key: Arc<AskarLocalKey>,
+        cc_tag: Vec<u8>,
+        receive: bool,
+    ) -> Result<Arc<AskarLocalKey>, ErrorCode> {
+        let key = derive_key_ecdh_1pu(
+            enc_alg.into(),
+            &ephemeral_key.key,
+            &receiver_key.key,
+            &sender_key.key,
+            &self.alg_id,
+            &self.apu,
+            &self.apv,
+            &cc_tag,
+            receive,
+        )?;
+        Ok(Arc::new(AskarLocalKey { key }))
+    }
+
     pub fn encrypt_direct(
         &self,
         enc_alg: AskarKeyAlg,
@@ -247,7 +289,7 @@ impl AskarEcdh1PU {
 
     pub fn sender_wrap_key(
         &self,
-        enc_alg: AskarKeyAlg,
+        wrap_alg: AskarKeyAlg,
         ephemeral_key: Arc<AskarLocalKey>,
         sender_key: Arc<AskarLocalKey>,
         receiver_key: Arc<AskarLocalKey>,
@@ -255,7 +297,7 @@ impl AskarEcdh1PU {
         cc_tag: Vec<u8>,
     ) -> Result<Arc<EncryptedBuffer>, ErrorCode> {
         let key = derive_key_ecdh_1pu(
-            enc_alg.into(),
+            wrap_alg.into(),
             &ephemeral_key.key,
             &receiver_key.key,
             &sender_key.key,

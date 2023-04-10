@@ -19,11 +19,28 @@ impl AskarScan {
 
 #[uniffi::export]
 impl AskarScan {
-    pub async fn next(&self) -> Result<Vec<Arc<AskarEntry>>, ErrorCode> {
+    pub async fn next(&self) -> Result<Option<Vec<Arc<AskarEntry>>>, ErrorCode> {
         let mut scan = self.scan.write().unwrap();
         let entries = scan.fetch_next().await?;
-        let entries = entries
+        let entries: Vec<Arc<AskarEntry>> = entries
             .unwrap_or(vec![])
+            .into_iter()
+            .map(|entry| Arc::new(AskarEntry::new(entry)))
+            .collect();
+        if entries.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(entries))
+        }
+    }
+
+    pub async fn fetch_all(&self) -> Result<Vec<Arc<AskarEntry>>, ErrorCode> {
+        let mut scan = self.scan.write().unwrap();
+        let mut entries = vec![];
+        while let Some(mut batch) = scan.fetch_next().await? {
+            entries.append(&mut batch);
+        }
+        let entries = entries
             .into_iter()
             .map(|entry| Arc::new(AskarEntry::new(entry)))
             .collect();
