@@ -16,6 +16,7 @@ keywords = ["hyperledger", "aries", "ssi", "verifiable", "credentials"]
 [[bin]]
 name = "uniffi-bindgen"
 path = "uniffi/uniffi-bindgen.rs"
+required-features = ["uffi"]
 
 [lib]
 name = "aries_askar"
@@ -28,11 +29,11 @@ no-default-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["all_backends", "uffi", "logger"]
+default = ["all_backends", "ffi", "logger"]
 all_backends = ["any", "postgres", "sqlite"]
 any = []
 ffi = ["any", "ffi-support", "logger"]
-uffi = ["uniffi", "uniffi_bindgen"]
+uffi = ["uniffi", "uniffi_bindgen", "all_backends", "logger"]
 jemalloc = ["jemallocator"]
 logger = ["env_logger", "log"]
 postgres = ["sqlx", "sqlx/postgres", "sqlx/tls"]
