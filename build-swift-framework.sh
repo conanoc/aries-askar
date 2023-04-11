@@ -24,4 +24,4 @@ cat > /tmp/import.txt <<EOF
 import SystemConfiguration
 #endif
 EOF
-cat /tmp/import.txt out/aries_askar.swift > wrappers/swift/Askar/Sources/Askar/
+cat /tmp/import.txt out/aries_askar.swift > wrappers/swift/Askar/Sources/Askar/aries_askar.swift
