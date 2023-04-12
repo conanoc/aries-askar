@@ -17,7 +17,7 @@ impl AskarScan {
     }
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 impl AskarScan {
     pub async fn next(&self) -> Result<Option<Vec<Arc<AskarEntry>>>, ErrorCode> {
         let mut scan = self.scan.write().unwrap();

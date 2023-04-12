@@ -30,7 +30,10 @@ impl AskarStoreManager {
         let key = generate_raw_store_key(seed.as_ref().map(|s| s.as_bytes()))?;
         Ok(key.to_string())
     }
+}
 
+#[uniffi::export(async_runtime = "tokio")]
+impl AskarStoreManager {
     pub async fn provision(
         &self,
         spec_uri: String,
@@ -83,7 +86,7 @@ pub struct AskarStore {
     store: RwLock<Option<AnyStore>>,    // Option is used to allow for the store to be closed
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 impl AskarStore {
     pub async fn create_profile(&self, profile: Option<String>) -> Result<String, ErrorCode> {
         let name = self
@@ -94,17 +97,6 @@ impl AskarStore {
             .ok_or(STORE_CLOSED_ERROR!())?
             .create_profile(profile)
             .await?;
-        Ok(name)
-    }
-
-    pub fn get_profile_name(&self) -> Result<String, ErrorCode> {
-        let name = self
-            .store
-            .read()
-            .unwrap()
-            .as_ref()
-            .ok_or(STORE_CLOSED_ERROR!())?
-            .get_profile_name().to_string();
         Ok(name)
     }
 
@@ -181,5 +173,19 @@ impl AskarStore {
             .session(profile)
             .await?;
         Ok(Arc::new(AskarSession::new(session)))
+    }
+}
+
+#[uniffi::export]
+impl AskarStore {
+    pub fn get_profile_name(&self) -> Result<String, ErrorCode> {
+        let name = self
+            .store
+            .read()
+            .unwrap()
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .get_profile_name().to_string();
+        Ok(name)
     }
 }

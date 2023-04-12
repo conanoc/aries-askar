@@ -35,7 +35,7 @@ impl AskarSession {
     }
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 impl AskarSession {
     pub async fn count(
         &self,
