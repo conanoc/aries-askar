@@ -2087,7 +2087,7 @@ public func FfiConverterTypeAskarSession_lower(_ value: AskarSession) -> UnsafeM
 public protocol AskarStoreProtocol {
     func close() async throws
     func createProfile(profile: String?) async throws -> String
-    func getProfileName() throws -> String
+    func getProfileName() async throws -> String
     func rekey(keyMethod: String?, passKey: String?) async throws
     func removeProfile(profile: String) async throws -> Bool
     func scan(profile: String?, categogy: String, tagFilter: String?, offset: Int64?, limit: Int64?) async throws -> AskarScan
@@ -2133,12 +2133,16 @@ public class AskarStore: AskarStoreProtocol {
         }
     }
 
-    public func getProfileName() throws -> String {
-        return try FfiConverterString.lift(
+    public func getProfileName() async throws -> String {
+        let future = try
             rustCallWithError(FfiConverterTypeErrorCode.self) {
                 uniffi_aries_askar_fn_method_askarstore_get_profile_name(self.pointer, $0)
             }
-        )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let env = Unmanaged.passRetained(_UniFFI_AskarStore_GetProfileName_Env(rustyFuture: future, continuation: continuation))
+            _UniFFI_AskarStore_GetProfileName_waker(raw_env: env.toOpaque())
+        }
     }
 
     public func rekey(keyMethod: String?, passKey: String?) async throws {
@@ -2270,6 +2274,51 @@ private func _UniFFI_AskarStore_CreateProfile_waker(raw_env: UnsafeMutableRawPoi
                 uniffi_aries_askar_fn_method_askarstore_create_profile_poll(
                     env_ref.rustFuture,
                     _UniFFI_AskarStore_CreateProfile_waker,
+                    env.toOpaque(),
+                    polledResult,
+                    $0
+                )
+            }
+
+            if isReady {
+                env_ref.continuation.resume(returning: try! FfiConverterString.lift(polledResult.move()))
+                polledResult.deallocate()
+                env.release()
+            }
+        } catch {
+            env_ref.continuation.resume(throwing: error)
+            polledResult.deallocate()
+            env.release()
+        }
+    }
+}
+
+private class _UniFFI_AskarStore_GetProfileName_Env {
+    var rustFuture: OpaquePointer
+    var continuation: CheckedContinuation<String, Error>
+
+    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<String, Error>) {
+        rustFuture = rustyFuture
+        self.continuation = continuation
+    }
+
+    deinit {
+        try! rustCall {
+            uniffi_aries_askar_fn_method_askarstore_get_profile_name_drop(self.rustFuture, $0)
+        }
+    }
+}
+
+private func _UniFFI_AskarStore_GetProfileName_waker(raw_env: UnsafeMutableRawPointer?) {
+    Task {
+        let env = Unmanaged<_UniFFI_AskarStore_GetProfileName_Env>.fromOpaque(raw_env!)
+        let env_ref = env.takeUnretainedValue()
+        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
+        do {
+            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
+                uniffi_aries_askar_fn_method_askarstore_get_profile_name_poll(
+                    env_ref.rustFuture,
+                    _UniFFI_AskarStore_GetProfileName_waker,
                     env.toOpaque(),
                     polledResult,
                     $0
@@ -3711,7 +3760,7 @@ private var checkVersionResult: CheckVersionResult {
     if uniffi_aries_askar_checksum_method_askarstore_create_profile() != 27418 {
         return CheckVersionResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 59164 {
+    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 15534 {
         return CheckVersionResult.apiChecksumMismatch
     }
     if uniffi_aries_askar_checksum_method_askarstore_rekey() != 33417 {

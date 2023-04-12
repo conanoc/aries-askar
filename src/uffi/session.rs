@@ -1,7 +1,8 @@
 use std::{
     str::FromStr,
-    sync::{Arc, RwLock}
+    sync::Arc,
 };
+use tokio::sync::RwLock;
 use crate::{
     any::AnySession,
     uffi::{error::ErrorCode, entry::AskarEntry, entry::AskarKeyEntry, key::AskarLocalKey},
@@ -45,7 +46,7 @@ impl AskarSession {
         Ok(self.
             session
             .write()
-            .unwrap()
+            .await
             .count(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
@@ -59,7 +60,7 @@ impl AskarSession {
         let entry = self
             .session
             .write()
-            .unwrap()
+            .await
             .fetch(&category, &name, for_update)
             .await?;
         Ok(entry.map(|entry| Arc::new(AskarEntry::new(entry))))
@@ -75,7 +76,7 @@ impl AskarSession {
         let entries = self
             .session
             .write()
-            .unwrap()
+            .await
             .fetch_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?, limit, for_update)
             .await?;
         Ok(entries
@@ -104,7 +105,7 @@ impl AskarSession {
         };
         self.session
             .write()
-            .unwrap()
+            .await
             .update(operation.into(), &category, &name, Some(&value), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
@@ -118,7 +119,7 @@ impl AskarSession {
         Ok(self
             .session
             .write()
-            .unwrap()
+            .await
             .remove_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
@@ -142,7 +143,7 @@ impl AskarSession {
         };
         self.session
             .write()
-            .unwrap()
+            .await
             .insert_key(&name, &key.key, metadata.as_deref(), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
@@ -156,7 +157,7 @@ impl AskarSession {
         let key = self
             .session
             .write()
-            .unwrap()
+            .await
             .fetch_key(&name, for_update)
             .await?;
         Ok(key.map(|entry| Arc::new(AskarKeyEntry::new(entry))))
@@ -174,7 +175,7 @@ impl AskarSession {
         let keys = self
             .session
             .write()
-            .unwrap()
+            .await
             .fetch_all_keys(algorithm.as_deref(), thumbprint.as_deref(), tag_filter, limit, for_update)
             .await?;
         Ok(keys
@@ -184,7 +185,7 @@ impl AskarSession {
     }
 
     pub async fn remove_key(&self, name: String) -> Result<(), ErrorCode> {
-        self.session.write().unwrap().remove_key(&name).await?;
+        self.session.write().await.remove_key(&name).await?;
         Ok(())
     }
 
@@ -206,7 +207,7 @@ impl AskarSession {
         };
         self.session
             .write()
-            .unwrap()
+            .await
             .update_key(&name, metadata.as_deref(), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())

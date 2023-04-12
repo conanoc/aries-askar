@@ -1,5 +1,8 @@
-use std::sync::{Arc, RwLock};
-use std::str::FromStr;
+use std::{
+    sync::Arc,
+    str::FromStr,
+};
+use tokio::sync::RwLock;
 use crate::{
     backend::{
         any::AnyStore,
@@ -88,11 +91,22 @@ pub struct AskarStore {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl AskarStore {
+    pub async fn get_profile_name(&self) -> Result<String, ErrorCode> {
+        let name = self
+            .store
+            .read()
+            .await
+            .as_ref()
+            .ok_or(STORE_CLOSED_ERROR!())?
+            .get_profile_name().to_string();
+        Ok(name)
+    }
+
     pub async fn create_profile(&self, profile: Option<String>) -> Result<String, ErrorCode> {
         let name = self
             .store
             .read()
-            .unwrap()
+            .await
             .as_ref()
             .ok_or(STORE_CLOSED_ERROR!())?
             .create_profile(profile)
@@ -104,7 +118,7 @@ impl AskarStore {
         let removed = self
             .store
             .read()
-            .unwrap()
+            .await
             .as_ref()
             .ok_or(STORE_CLOSED_ERROR!())?
             .remove_profile(profile)
@@ -121,7 +135,7 @@ impl AskarStore {
         self
             .store
             .write()
-            .unwrap()
+            .await
             .as_mut()
             .ok_or(STORE_CLOSED_ERROR!())?
             .rekey(key_method, pass_key)
@@ -130,7 +144,7 @@ impl AskarStore {
     }
 
     pub async fn close(&self) -> Result<(), ErrorCode> {
-        let store = self.store.write().unwrap().take();
+        let store = self.store.write().await.take();
         store
             .ok_or(STORE_CLOSED_ERROR!())?
             .close().await?;
@@ -149,7 +163,7 @@ impl AskarStore {
         let scan = self
             .store
             .read()
-            .unwrap()
+            .await
             .as_ref()
             .ok_or(STORE_CLOSED_ERROR!())?
             .scan(
@@ -167,25 +181,11 @@ impl AskarStore {
         let session = self
             .store
             .read()
-            .unwrap()
+            .await
             .as_ref()
             .ok_or(STORE_CLOSED_ERROR!())?
             .session(profile)
             .await?;
         Ok(Arc::new(AskarSession::new(session)))
-    }
-}
-
-#[uniffi::export]
-impl AskarStore {
-    pub fn get_profile_name(&self) -> Result<String, ErrorCode> {
-        let name = self
-            .store
-            .read()
-            .unwrap()
-            .as_ref()
-            .ok_or(STORE_CLOSED_ERROR!())?
-            .get_profile_name().to_string();
-        Ok(name)
     }
 }
