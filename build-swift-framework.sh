@@ -10,7 +10,6 @@ FRAMEWORK_LIBRARY_NAME=${NAME}FFI
 FRAMEWORK_NAME="$FRAMEWORK_LIBRARY_NAME.framework"
 XC_FRAMEWORK_NAME="$FRAMEWORK_LIBRARY_NAME.xcframework"
 HEADER_NAME="${NAME}FFI.h"
-MODULEMAP_NAME="${NAME}FFI.modulemap"
 OUT_PATH="out"
 WRAPPER_PATH="wrappers/swift/Askar/Sources/Askar"
 
@@ -32,8 +31,8 @@ done
 # Generate swift wrapper
 echo "Generating swift wrapper..."
 mkdir -p $OUT_PATH
-cargo build --release --no-default-features --features uffi
-cargo run --features uffi --bin uniffi-bindgen generate uniffi/askar.udl --language swift -o $OUT_PATH --lib-file ./target/release/$LIBRARY_NAME
+CURRENT_ARCH=$(rustc --version --verbose | grep host | cut -f2 -d' ')
+cargo run --features uffi --bin uniffi-bindgen generate uniffi/askar.udl --language swift -o $OUT_PATH --lib-file ./target/$CURRENT_ARCH/release/$LIBRARY_NAME
 
 # Merge libraries with lipo
 echo "Merging libraries with lipo..."
@@ -49,7 +48,14 @@ rm -rf $OUT_PATH/$FRAMEWORK_NAME
 mkdir -p $OUT_PATH/$FRAMEWORK_NAME/Headers
 mkdir -p $OUT_PATH/$FRAMEWORK_NAME/Modules
 cp $OUT_PATH/$HEADER_NAME $OUT_PATH/$FRAMEWORK_NAME/Headers
-cp $OUT_PATH/$MODULEMAP_NAME $OUT_PATH/$FRAMEWORK_NAME/Modules/module.modulemap
+cat <<EOT > $OUT_PATH/$FRAMEWORK_NAME/Modules/module.modulemap
+framework module $FRAMEWORK_LIBRARY_NAME {
+  umbrella header "$HEADER_NAME"
+
+  export *
+  module * { export * }
+}
+EOT
 
 cat <<EOT > $OUT_PATH/$FRAMEWORK_NAME/Info.plist
 <?xml version="1.0" encoding="UTF-8"?>

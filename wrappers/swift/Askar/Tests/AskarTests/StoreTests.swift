@@ -28,7 +28,7 @@ final class StoreTests: XCTestCase {
         if store != nil {
             let storeURL = temporaryDirectoryURL.appendingPathComponent("test.db")
             try await store.close()
-            _ = try await storeManager.remove(specUri: storeURL.path)
+            _ = try await storeManager.remove(specUri: URI_SCHEMA + storeURL.path)
         }
         try await super.tearDown()
     }
