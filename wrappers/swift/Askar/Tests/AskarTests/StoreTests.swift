@@ -51,8 +51,9 @@ final class StoreTests: XCTestCase {
             XCTAssertEqual(found.category(), TEST_ENTRY["category"])
             XCTAssertEqual(found.name(), TEST_ENTRY["name"])
             XCTAssertEqual(String(bytes: found.value(), encoding: .utf8), TEST_ENTRY["value"])
-            XCTAssertEqual(found.tags()["~plaintag"], "a")
-            XCTAssertEqual(found.tags()["enctag"], "b")
+            let tags = found.tags()
+            XCTAssertEqual(tags["plaintag"], "a")
+            XCTAssertEqual(tags["enctag"], "b")
         } else {
             XCTFail("Entry not found")
         }
