@@ -225,8 +225,8 @@ impl AskarEcdh1PU {
         let key = derive_key_ecdh_1pu(
             enc_alg.into(),
             &ephemeral_key.key,
-            &receiver_key.key,
             &sender_key.key,
+            &receiver_key.key,
             &self.alg_id,
             &self.apu,
             &self.apv,
@@ -249,8 +249,8 @@ impl AskarEcdh1PU {
         let key = derive_key_ecdh_1pu(
             enc_alg.into(),
             &ephemeral_key.key,
-            &receiver_key.key,
             &sender_key.key,
+            &receiver_key.key,
             &self.alg_id,
             &self.apu,
             &self.apv,
@@ -275,8 +275,8 @@ impl AskarEcdh1PU {
         let key = derive_key_ecdh_1pu(
             enc_alg.into(),
             &ephemeral_key.key,
-            &receiver_key.key,
             &sender_key.key,
+            &receiver_key.key,
             &self.alg_id,
             &self.apu,
             &self.apv,
@@ -299,8 +299,8 @@ impl AskarEcdh1PU {
         let key = derive_key_ecdh_1pu(
             wrap_alg.into(),
             &ephemeral_key.key,
-            &receiver_key.key,
             &sender_key.key,
+            &receiver_key.key,
             &self.alg_id,
             &self.apu,
             &self.apv,
@@ -326,8 +326,8 @@ impl AskarEcdh1PU {
         let key = derive_key_ecdh_1pu(
             enc_alg.into(),
             &ephemeral_key.key,
-            &receiver_key.key,
             &sender_key.key,
+            &receiver_key.key,
             &self.alg_id,
             &self.apu,
             &self.apv,
