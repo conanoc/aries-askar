@@ -18,6 +18,7 @@ final class StoreTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
 
+        try storeManager.setDefaultLogger()
         let storeURL = temporaryDirectoryURL.appendingPathComponent("test.db")
         let key = try storeManager.generateRawStoreKey(seed: nil)
         store = try await storeManager.provision(specUri: URI_SCHEMA + storeURL.path, keyMethod: "raw", passKey: key, profile: nil, recreate: true)

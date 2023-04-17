@@ -2561,6 +2561,7 @@ public protocol AskarStoreManagerProtocol {
     func open(specUri: String, keyMethod: String?, passKey: String?, profile: String?) async throws -> AskarStore
     func provision(specUri: String, keyMethod: String?, passKey: String?, profile: String?, recreate: Bool) async throws -> AskarStore
     func remove(specUri: String) async throws -> Bool
+    func setDefaultLogger() throws
 }
 
 public class AskarStoreManager: AskarStoreManagerProtocol {
@@ -2636,6 +2637,13 @@ public class AskarStoreManager: AskarStoreManagerProtocol {
             let env = Unmanaged.passRetained(_UniFFI_AskarStoreManager_Remove_Env(rustyFuture: future, continuation: continuation))
             _UniFFI_AskarStoreManager_Remove_waker(raw_env: env.toOpaque())
         }
+    }
+
+    public func setDefaultLogger() throws {
+        try
+            rustCallWithError(FfiConverterTypeErrorCode.self) {
+                uniffi_aries_askar_fn_method_askarstoremanager_set_default_logger(self.pointer, $0)
+            }
     }
 }
 
@@ -3869,6 +3877,9 @@ private var checkVersionResult: CheckVersionResult {
         return CheckVersionResult.apiChecksumMismatch
     }
     if uniffi_aries_askar_checksum_method_askarstoremanager_remove() != 1664 {
+        return CheckVersionResult.apiChecksumMismatch
+    }
+    if uniffi_aries_askar_checksum_method_askarstoremanager_set_default_logger() != 9647 {
         return CheckVersionResult.apiChecksumMismatch
     }
     if uniffi_aries_askar_checksum_method_askarcrypto_box_open() != 34635 {

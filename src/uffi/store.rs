@@ -33,6 +33,12 @@ impl AskarStoreManager {
         let key = generate_raw_store_key(seed.as_ref().map(|s| s.as_bytes()))?;
         Ok(key.to_string())
     }
+
+    pub fn set_default_logger(&self) -> Result<(), ErrorCode> {
+        env_logger::try_init().map_err(
+            |e| ErrorCode::Unexpected { message: format!("{}", e) })?;
+        Ok(())
+    }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
