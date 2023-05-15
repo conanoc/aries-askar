@@ -242,29 +242,42 @@ private extension RustCallStatus {
 }
 
 private func rustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T {
-    try makeRustCall(callback, errorHandler: {
-        $0.deallocate()
-        return UniffiInternalError.unexpectedRustCallError
-    })
+    try makeRustCall(callback, errorHandler: nil)
 }
 
-private func rustCallWithError<T, F: FfiConverter>
-(_ errorFfiConverter: F.Type, _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T
-    where F.SwiftType: Error, F.FfiType == RustBuffer
-{
-    try makeRustCall(callback, errorHandler: { try errorFfiConverter.lift($0) })
+private func rustCallWithError<T>(
+    _ errorHandler: @escaping (RustBuffer) throws -> Error,
+    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T
+) throws -> T {
+    try makeRustCall(callback, errorHandler: errorHandler)
 }
 
-private func makeRustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T, errorHandler: (RustBuffer) throws -> Error) throws -> T {
-    uniffiCheckFfiVersionMismatch()
+private func makeRustCall<T>(
+    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T,
+    errorHandler: ((RustBuffer) throws -> Error)?
+) throws -> T {
+    uniffiEnsureInitialized()
     var callStatus = RustCallStatus()
     let returnedVal = callback(&callStatus)
+    try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: errorHandler)
+    return returnedVal
+}
+
+private func uniffiCheckCallStatus(
+    callStatus: RustCallStatus,
+    errorHandler: ((RustBuffer) throws -> Error)?
+) throws {
     switch callStatus.code {
     case CALL_SUCCESS:
-        return returnedVal
+        return
 
     case CALL_ERROR:
-        throw try errorHandler(callStatus.errorBuf)
+        if let errorHandler = errorHandler {
+            throw try errorHandler(callStatus.errorBuf)
+        } else {
+            callStatus.errorBuf.deallocate()
+            throw UniffiInternalError.unexpectedRustCallError
+        }
 
     case CALL_PANIC:
         // When the rust code sees a panic, it tries to construct a RustBuffer
@@ -402,7 +415,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public convenience init() {
         self.init(unsafeFromRawPointer: try! rustCall {
-            uniffi_aries_askar_fn_method_askarcrypto_new($0)
+            uniffi_aries_askar_fn_constructor_askarcrypto_new($0)
         })
     }
 
@@ -412,7 +425,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public func boxOpen(receiverKey: AskarLocalKey, senderKey: AskarLocalKey, message: [UInt8], nonce: [UInt8]) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarcrypto_box_open(self.pointer,
                                                                   FfiConverterTypeAskarLocalKey.lower(receiverKey),
                                                                   FfiConverterTypeAskarLocalKey.lower(senderKey),
@@ -424,7 +437,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public func boxSeal(receiverKey: AskarLocalKey, message: [UInt8]) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarcrypto_box_seal(self.pointer,
                                                                   FfiConverterTypeAskarLocalKey.lower(receiverKey),
                                                                   FfiConverterSequenceUInt8.lower(message), $0)
@@ -434,7 +447,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public func boxSealOpen(receiverKey: AskarLocalKey, ciphertext: [UInt8]) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarcrypto_box_seal_open(self.pointer,
                                                                        FfiConverterTypeAskarLocalKey.lower(receiverKey),
                                                                        FfiConverterSequenceUInt8.lower(ciphertext), $0)
@@ -444,7 +457,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public func cryptoBox(receiverKey: AskarLocalKey, senderKey: AskarLocalKey, message: [UInt8], nonce: [UInt8]) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarcrypto_crypto_box(self.pointer,
                                                                     FfiConverterTypeAskarLocalKey.lower(receiverKey),
                                                                     FfiConverterTypeAskarLocalKey.lower(senderKey),
@@ -456,7 +469,7 @@ public class AskarCrypto: AskarCryptoProtocol {
 
     public func randomNonce() throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarcrypto_random_nonce(self.pointer, $0)
             }
         )
@@ -521,7 +534,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public convenience init(algId: String, apu: String, apv: String) {
         self.init(unsafeFromRawPointer: try! rustCall {
-            uniffi_aries_askar_fn_method_askarecdh1pu_new(
+            uniffi_aries_askar_fn_constructor_askarecdh1pu_new(
                 FfiConverterString.lower(algId),
                 FfiConverterString.lower(apu),
                 FfiConverterString.lower(apv), $0
@@ -535,7 +548,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public func decryptDirect(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, senderKey: AskarLocalKey, receiverKey: AskarLocalKey, ciphertext: [UInt8], tag: [UInt8]?, nonce: [UInt8], aad: [UInt8]?) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdh1pu_decrypt_direct(self.pointer,
                                                                          FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                          FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -551,7 +564,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public func deriveKey(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, senderKey: AskarLocalKey, receiverKey: AskarLocalKey, ccTag: [UInt8], receive: Bool) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdh1pu_derive_key(self.pointer,
                                                                      FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                      FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -565,7 +578,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public func encryptDirect(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, senderKey: AskarLocalKey, receiverKey: AskarLocalKey, message: [UInt8], nonce: [UInt8]?, aad: [UInt8]?) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdh1pu_encrypt_direct(self.pointer,
                                                                          FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                          FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -580,7 +593,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public func receiverUnwrapKey(wrapAlg: AskarKeyAlg, encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, senderKey: AskarLocalKey, receiverKey: AskarLocalKey, ciphertext: [UInt8], ccTag: [UInt8], nonce: [UInt8]?, tag: [UInt8]?) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdh1pu_receiver_unwrap_key(self.pointer,
                                                                               FfiConverterTypeAskarKeyAlg.lower(wrapAlg),
                                                                               FfiConverterTypeAskarKeyAlg.lower(encAlg),
@@ -597,7 +610,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
 
     public func senderWrapKey(wrapAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, senderKey: AskarLocalKey, receiverKey: AskarLocalKey, cek: AskarLocalKey, ccTag: [UInt8]) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdh1pu_sender_wrap_key(self.pointer,
                                                                           FfiConverterTypeAskarKeyAlg.lower(wrapAlg),
                                                                           FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -668,7 +681,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public convenience init(algId: String, apu: String, apv: String) {
         self.init(unsafeFromRawPointer: try! rustCall {
-            uniffi_aries_askar_fn_method_askarecdhes_new(
+            uniffi_aries_askar_fn_constructor_askarecdhes_new(
                 FfiConverterString.lower(algId),
                 FfiConverterString.lower(apu),
                 FfiConverterString.lower(apv), $0
@@ -682,7 +695,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public func decryptDirect(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, receiverKey: AskarLocalKey, ciphertext: [UInt8], tag: [UInt8]?, nonce: [UInt8], aad: [UInt8]?) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdhes_decrypt_direct(self.pointer,
                                                                         FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                         FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -697,7 +710,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public func deriveKey(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, receiverKey: AskarLocalKey, receive: Bool) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdhes_derive_key(self.pointer,
                                                                     FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                     FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -709,7 +722,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public func encryptDirect(encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, receiverKey: AskarLocalKey, message: [UInt8], nonce: [UInt8]?, aad: [UInt8]?) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdhes_encrypt_direct(self.pointer,
                                                                         FfiConverterTypeAskarKeyAlg.lower(encAlg),
                                                                         FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -723,7 +736,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public func receiverUnwrapKey(wrapAlg: AskarKeyAlg, encAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, receiverKey: AskarLocalKey, ciphertext: [UInt8], nonce: [UInt8]?, tag: [UInt8]?) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdhes_receiver_unwrap_key(self.pointer,
                                                                              FfiConverterTypeAskarKeyAlg.lower(wrapAlg),
                                                                              FfiConverterTypeAskarKeyAlg.lower(encAlg),
@@ -738,7 +751,7 @@ public class AskarEcdhEs: AskarEcdhEsProtocol {
 
     public func senderWrapKey(wrapAlg: AskarKeyAlg, ephemeralKey: AskarLocalKey, receiverKey: AskarLocalKey, cek: AskarLocalKey) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarecdhes_sender_wrap_key(self.pointer,
                                                                          FfiConverterTypeAskarKeyAlg.lower(wrapAlg),
                                                                          FfiConverterTypeAskarLocalKey.lower(ephemeralKey),
@@ -926,7 +939,7 @@ public class AskarKeyEntry: AskarKeyEntryProtocol {
 
     public func loadLocalKey() throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarkeyentry_load_local_key(self.pointer, $0)
             }
         )
@@ -1035,7 +1048,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func aeadDecrypt(ciphertext: [UInt8], tag: [UInt8]?, nonce: [UInt8], aad: [UInt8]?) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_aead_decrypt(self.pointer,
                                                                         FfiConverterSequenceUInt8.lower(ciphertext),
                                                                         FfiConverterOptionSequenceUInt8.lower(tag),
@@ -1047,7 +1060,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func aeadEncrypt(message: [UInt8], nonce: [UInt8]?, aad: [UInt8]?) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_aead_encrypt(self.pointer,
                                                                         FfiConverterSequenceUInt8.lower(message),
                                                                         FfiConverterOptionSequenceUInt8.lower(nonce),
@@ -1068,7 +1081,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func aeadParams() throws -> AeadParams {
         return try FfiConverterTypeAeadParams.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_aead_params(self.pointer, $0)
             }
         )
@@ -1076,7 +1089,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func aeadRandomNonce() throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_aead_random_nonce(self.pointer, $0)
             }
         )
@@ -1093,7 +1106,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func convertKey(alg: AskarKeyAlg) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_convert_key(self.pointer,
                                                                        FfiConverterTypeAskarKeyAlg.lower(alg), $0)
             }
@@ -1102,7 +1115,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func signMessage(message: [UInt8], sigType: String?) throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_sign_message(self.pointer,
                                                                         FfiConverterSequenceUInt8.lower(message),
                                                                         FfiConverterOptionString.lower(sigType), $0)
@@ -1112,7 +1125,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toJwkPublic(alg: AskarKeyAlg?) throws -> String {
         return try FfiConverterString.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_jwk_public(self.pointer,
                                                                          FfiConverterOptionTypeAskarKeyAlg.lower(alg), $0)
             }
@@ -1121,7 +1134,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toJwkSecret() throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_jwk_secret(self.pointer, $0)
             }
         )
@@ -1129,7 +1142,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toJwkThumbprint(alg: AskarKeyAlg?) throws -> String {
         return try FfiConverterString.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_jwk_thumbprint(self.pointer,
                                                                              FfiConverterOptionTypeAskarKeyAlg.lower(alg), $0)
             }
@@ -1138,7 +1151,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toJwkThumbprints() throws -> [String] {
         return try FfiConverterSequenceString.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_jwk_thumbprints(self.pointer, $0)
             }
         )
@@ -1146,7 +1159,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toKeyExchange(alg: AskarKeyAlg, pk: AskarLocalKey) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_key_exchange(self.pointer,
                                                                            FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                            FfiConverterTypeAskarLocalKey.lower(pk), $0)
@@ -1156,7 +1169,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toPublicBytes() throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_public_bytes(self.pointer, $0)
             }
         )
@@ -1164,7 +1177,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func toSecretBytes() throws -> [UInt8] {
         return try FfiConverterSequenceUInt8.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_to_secret_bytes(self.pointer, $0)
             }
         )
@@ -1172,7 +1185,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func unwrapKey(alg: AskarKeyAlg, ciphertext: [UInt8], tag: [UInt8]?, nonce: [UInt8]?) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_unwrap_key(self.pointer,
                                                                       FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                       FfiConverterSequenceUInt8.lower(ciphertext),
@@ -1184,7 +1197,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func verifySignature(message: [UInt8], signature: [UInt8], sigType: String?) throws -> Bool {
         return try FfiConverterBool.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_verify_signature(self.pointer,
                                                                             FfiConverterSequenceUInt8.lower(message),
                                                                             FfiConverterSequenceUInt8.lower(signature),
@@ -1195,7 +1208,7 @@ public class AskarLocalKey: AskarLocalKeyProtocol {
 
     public func wrapKey(key: AskarLocalKey, nonce: [UInt8]?) throws -> EncryptedBuffer {
         return try FfiConverterTypeEncryptedBuffer.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarlocalkey_wrap_key(self.pointer,
                                                                     FfiConverterTypeAskarLocalKey.lower(key),
                                                                     FfiConverterOptionSequenceUInt8.lower(nonce), $0)
@@ -1262,116 +1275,46 @@ public class AskarScan: AskarScanProtocol {
     }
 
     public func fetchAll() async throws -> [AskarEntry] {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarscan_fetch_all(self.pointer, $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<[AskarEntry], Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarscan_fetch_all(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarScan_FetchAll_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarScan_FetchAll_waker(raw_env: env.toOpaque())
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerSequenceTypeAskarEntryTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func next() async throws -> [AskarEntry]? {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarscan_next(self.pointer, $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<[AskarEntry]?, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarscan_next(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarScan_Next_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarScan_Next_waker(raw_env: env.toOpaque())
-        }
-    }
-}
-
-private class _UniFFI_AskarScan_FetchAll_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<[AskarEntry], Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<[AskarEntry], Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarscan_fetch_all_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarScan_FetchAll_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarScan_FetchAll_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarscan_fetch_all_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarScan_FetchAll_waker,
-                    env.toOpaque(),
-                    polledResult,
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerOptionalSequenceTypeAskarEntryTypeErrorCode,
+                    &continuation,
                     $0
                 )
             }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterSequenceTypeAskarEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarScan_Next_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<[AskarEntry]?, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<[AskarEntry]?, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarscan_next_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarScan_Next_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarScan_Next_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarscan_next_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarScan_Next_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterOptionSequenceTypeAskarEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
         }
     }
 }
@@ -1442,606 +1385,256 @@ public class AskarSession: AskarSessionProtocol {
     }
 
     public func count(category: String, tagFilter: String?) async throws -> Int64 {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_count(self.pointer,
-                                                                FfiConverterString.lower(category),
-                                                                FfiConverterOptionString.lower(tagFilter), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Int64, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_count(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_Count_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_Count_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(category),
+                    FfiConverterOptionString.lower(tagFilter),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandleri64TypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func fetch(category: String, name: String, forUpdate: Bool) async throws -> AskarEntry? {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch(self.pointer,
-                                                                FfiConverterString.lower(category),
-                                                                FfiConverterString.lower(name),
-                                                                FfiConverterBool.lower(forUpdate), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarEntry?, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_fetch(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_Fetch_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_Fetch_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(category),
+                    FfiConverterString.lower(name),
+                    FfiConverterBool.lower(forUpdate),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerOptionalTypeAskarEntryTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func fetchAll(category: String, tagFilter: String?, limit: Int64?, forUpdate: Bool) async throws -> [AskarEntry] {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_all(self.pointer,
-                                                                    FfiConverterString.lower(category),
-                                                                    FfiConverterOptionString.lower(tagFilter),
-                                                                    FfiConverterOptionInt64.lower(limit),
-                                                                    FfiConverterBool.lower(forUpdate), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<[AskarEntry], Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_fetch_all(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_FetchAll_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_FetchAll_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(category),
+                    FfiConverterOptionString.lower(tagFilter),
+                    FfiConverterOptionInt64.lower(limit),
+                    FfiConverterBool.lower(forUpdate),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerSequenceTypeAskarEntryTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func fetchAllKeys(algorithm: String?, thumbprint: String?, tagFilter: String?, limit: Int64?, forUpdate: Bool) async throws -> [AskarKeyEntry] {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_all_keys(self.pointer,
-                                                                         FfiConverterOptionString.lower(algorithm),
-                                                                         FfiConverterOptionString.lower(thumbprint),
-                                                                         FfiConverterOptionString.lower(tagFilter),
-                                                                         FfiConverterOptionInt64.lower(limit),
-                                                                         FfiConverterBool.lower(forUpdate), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<[AskarKeyEntry], Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_fetch_all_keys(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_FetchAllKeys_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_FetchAllKeys_waker(raw_env: env.toOpaque())
+                    FfiConverterOptionString.lower(algorithm),
+                    FfiConverterOptionString.lower(thumbprint),
+                    FfiConverterOptionString.lower(tagFilter),
+                    FfiConverterOptionInt64.lower(limit),
+                    FfiConverterBool.lower(forUpdate),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerSequenceTypeAskarKeyEntryTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func fetchKey(name: String, forUpdate: Bool) async throws -> AskarKeyEntry? {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_key(self.pointer,
-                                                                    FfiConverterString.lower(name),
-                                                                    FfiConverterBool.lower(forUpdate), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarKeyEntry?, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_fetch_key(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_FetchKey_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_FetchKey_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(name),
+                    FfiConverterBool.lower(forUpdate),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerOptionalTypeAskarKeyEntryTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func insertKey(name: String, key: AskarLocalKey, metadata: String?, tags: String?, expiryMs: Int64?) async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_insert_key(self.pointer,
-                                                                     FfiConverterString.lower(name),
-                                                                     FfiConverterTypeAskarLocalKey.lower(key),
-                                                                     FfiConverterOptionString.lower(metadata),
-                                                                     FfiConverterOptionString.lower(tags),
-                                                                     FfiConverterOptionInt64.lower(expiryMs), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_insert_key(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_InsertKey_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_InsertKey_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(name),
+                    FfiConverterTypeAskarLocalKey.lower(key),
+                    FfiConverterOptionString.lower(metadata),
+                    FfiConverterOptionString.lower(tags),
+                    FfiConverterOptionInt64.lower(expiryMs),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func removeAll(category: String, tagFilter: String?) async throws -> Int64 {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_remove_all(self.pointer,
-                                                                     FfiConverterString.lower(category),
-                                                                     FfiConverterOptionString.lower(tagFilter), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Int64, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_remove_all(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_RemoveAll_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_RemoveAll_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(category),
+                    FfiConverterOptionString.lower(tagFilter),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandleri64TypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func removeKey(name: String) async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_remove_key(self.pointer,
-                                                                     FfiConverterString.lower(name), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_remove_key(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_RemoveKey_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_RemoveKey_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(name),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func update(operation: AskarEntryOperation, category: String, name: String, value: [UInt8], tags: String?, expiryMs: Int64?) async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_update(self.pointer,
-                                                                 FfiConverterTypeAskarEntryOperation.lower(operation),
-                                                                 FfiConverterString.lower(category),
-                                                                 FfiConverterString.lower(name),
-                                                                 FfiConverterSequenceUInt8.lower(value),
-                                                                 FfiConverterOptionString.lower(tags),
-                                                                 FfiConverterOptionInt64.lower(expiryMs), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_update(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_Update_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_Update_waker(raw_env: env.toOpaque())
+                    FfiConverterTypeAskarEntryOperation.lower(operation),
+                    FfiConverterString.lower(category),
+                    FfiConverterString.lower(name),
+                    FfiConverterSequenceUInt8.lower(value),
+                    FfiConverterOptionString.lower(tags),
+                    FfiConverterOptionInt64.lower(expiryMs),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func updateKey(name: String, metadata: String?, tags: String?, expiryMs: Int64?) async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_update_key(self.pointer,
-                                                                     FfiConverterString.lower(name),
-                                                                     FfiConverterOptionString.lower(metadata),
-                                                                     FfiConverterOptionString.lower(tags),
-                                                                     FfiConverterOptionInt64.lower(expiryMs), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_update_key(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarSession_UpdateKey_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarSession_UpdateKey_waker(raw_env: env.toOpaque())
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_Count_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Int64, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Int64, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_count_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_Count_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_Count_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_count_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_Count_waker,
-                    env.toOpaque(),
-                    polledResult,
+                    FfiConverterString.lower(name),
+                    FfiConverterOptionString.lower(metadata),
+                    FfiConverterOptionString.lower(tags),
+                    FfiConverterOptionInt64.lower(expiryMs),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
                     $0
                 )
             }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterInt64.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_Fetch_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarEntry?, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarEntry?, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_fetch_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_Fetch_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_Fetch_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_Fetch_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterOptionTypeAskarEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_FetchAll_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<[AskarEntry], Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<[AskarEntry], Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_fetch_all_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_FetchAll_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_FetchAll_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_all_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_FetchAll_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterSequenceTypeAskarEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_FetchAllKeys_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<[AskarKeyEntry], Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<[AskarKeyEntry], Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_fetch_all_keys_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_FetchAllKeys_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_FetchAllKeys_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_all_keys_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_FetchAllKeys_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterSequenceTypeAskarKeyEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_FetchKey_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarKeyEntry?, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarKeyEntry?, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_fetch_key_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_FetchKey_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_FetchKey_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_fetch_key_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_FetchKey_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterOptionTypeAskarKeyEntry.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_InsertKey_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_insert_key_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_InsertKey_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_InsertKey_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_insert_key_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_InsertKey_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_RemoveAll_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Int64, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Int64, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_remove_all_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_RemoveAll_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_RemoveAll_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_remove_all_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_RemoveAll_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterInt64.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_RemoveKey_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_remove_key_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_RemoveKey_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_RemoveKey_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_remove_key_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_RemoveKey_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_Update_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_update_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_Update_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_Update_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_update_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_Update_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarSession_UpdateKey_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarsession_update_key_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarSession_UpdateKey_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarSession_UpdateKey_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarsession_update_key_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarSession_UpdateKey_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
         }
     }
 }
@@ -2109,411 +1702,166 @@ public class AskarStore: AskarStoreProtocol {
     }
 
     public func close() async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_close(self.pointer, $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_close(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_Close_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_Close_waker(raw_env: env.toOpaque())
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func createProfile(profile: String?) async throws -> String {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_create_profile(self.pointer,
-                                                                       FfiConverterOptionString.lower(profile), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<String, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_create_profile(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_CreateProfile_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_CreateProfile_waker(raw_env: env.toOpaque())
+                    FfiConverterOptionString.lower(profile),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerstringTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func getProfileName() async throws -> String {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_get_profile_name(self.pointer, $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<String, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_get_profile_name(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_GetProfileName_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_GetProfileName_waker(raw_env: env.toOpaque())
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerstringTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func rekey(keyMethod: String?, passKey: String?) async throws {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_rekey(self.pointer,
-                                                              FfiConverterOptionString.lower(keyMethod),
-                                                              FfiConverterOptionString.lower(passKey), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_rekey(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_Rekey_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_Rekey_waker(raw_env: env.toOpaque())
+                    FfiConverterOptionString.lower(keyMethod),
+                    FfiConverterOptionString.lower(passKey),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func removeProfile(profile: String) async throws -> Bool {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_remove_profile(self.pointer,
-                                                                       FfiConverterString.lower(profile), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Bool, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_remove_profile(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_RemoveProfile_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_RemoveProfile_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(profile),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerboolTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func scan(profile: String?, categogy: String, tagFilter: String?, offset: Int64?, limit: Int64?) async throws -> AskarScan {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_scan(self.pointer,
-                                                             FfiConverterOptionString.lower(profile),
-                                                             FfiConverterString.lower(categogy),
-                                                             FfiConverterOptionString.lower(tagFilter),
-                                                             FfiConverterOptionInt64.lower(offset),
-                                                             FfiConverterOptionInt64.lower(limit), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarScan, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_scan(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_Scan_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_Scan_waker(raw_env: env.toOpaque())
+                    FfiConverterOptionString.lower(profile),
+                    FfiConverterString.lower(categogy),
+                    FfiConverterOptionString.lower(tagFilter),
+                    FfiConverterOptionInt64.lower(offset),
+                    FfiConverterOptionInt64.lower(limit),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerTypeAskarScanTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func session(profile: String?) async throws -> AskarSession {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_session(self.pointer,
-                                                                FfiConverterOptionString.lower(profile), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarSession, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstore_session(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStore_Session_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStore_Session_waker(raw_env: env.toOpaque())
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_Close_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_close_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_Close_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_Close_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_close_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_Close_waker,
-                    env.toOpaque(),
-                    polledResult,
+                    FfiConverterOptionString.lower(profile),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerTypeAskarSessionTypeErrorCode,
+                    &continuation,
                     $0
                 )
             }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_CreateProfile_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<String, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<String, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_create_profile_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_CreateProfile_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_CreateProfile_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_create_profile_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_CreateProfile_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterString.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_GetProfileName_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<String, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<String, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_get_profile_name_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_GetProfileName_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_GetProfileName_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<RustBuffer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_get_profile_name_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_GetProfileName_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterString.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_Rekey_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Void, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Void, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_rekey_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_Rekey_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_Rekey_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutableRawPointer.allocate(byteCount: 0, alignment: 0)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_rekey_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_Rekey_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: ())
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_RemoveProfile_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Bool, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Bool, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_remove_profile_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_RemoveProfile_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_RemoveProfile_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<Int8>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_remove_profile_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_RemoveProfile_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterBool.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_Scan_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarScan, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarScan, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_scan_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_Scan_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_Scan_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer <UnsafeMutableRawPointer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_scan_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_Scan_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterTypeAskarScan.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStore_Session_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarSession, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarSession, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstore_session_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStore_Session_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStore_Session_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer <UnsafeMutableRawPointer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstore_session_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStore_Session_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterTypeAskarSession.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
         }
     }
 }
@@ -2576,7 +1924,7 @@ public class AskarStoreManager: AskarStoreManagerProtocol {
 
     public convenience init() {
         self.init(unsafeFromRawPointer: try! rustCall {
-            uniffi_aries_askar_fn_method_askarstoremanager_new($0)
+            uniffi_aries_askar_fn_constructor_askarstoremanager_new($0)
         })
     }
 
@@ -2586,7 +1934,7 @@ public class AskarStoreManager: AskarStoreManagerProtocol {
 
     public func generateRawStoreKey(seed: String?) throws -> String {
         return try FfiConverterString.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarstoremanager_generate_raw_store_key(self.pointer,
                                                                                       FfiConverterOptionString.lower(seed), $0)
             }
@@ -2594,191 +1942,86 @@ public class AskarStoreManager: AskarStoreManagerProtocol {
     }
 
     public func open(specUri: String, keyMethod: String?, passKey: String?, profile: String?) async throws -> AskarStore {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_open(self.pointer,
-                                                                    FfiConverterString.lower(specUri),
-                                                                    FfiConverterOptionString.lower(keyMethod),
-                                                                    FfiConverterOptionString.lower(passKey),
-                                                                    FfiConverterOptionString.lower(profile), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarStore, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstoremanager_open(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStoreManager_Open_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStoreManager_Open_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(specUri),
+                    FfiConverterOptionString.lower(keyMethod),
+                    FfiConverterOptionString.lower(passKey),
+                    FfiConverterOptionString.lower(profile),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerTypeAskarStoreTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func provision(specUri: String, keyMethod: String?, passKey: String?, profile: String?, recreate: Bool) async throws -> AskarStore {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_provision(self.pointer,
-                                                                         FfiConverterString.lower(specUri),
-                                                                         FfiConverterOptionString.lower(keyMethod),
-                                                                         FfiConverterOptionString.lower(passKey),
-                                                                         FfiConverterOptionString.lower(profile),
-                                                                         FfiConverterBool.lower(recreate), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<AskarStore, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstoremanager_provision(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStoreManager_Provision_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStoreManager_Provision_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(specUri),
+                    FfiConverterOptionString.lower(keyMethod),
+                    FfiConverterOptionString.lower(passKey),
+                    FfiConverterOptionString.lower(profile),
+                    FfiConverterBool.lower(recreate),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerTypeAskarStoreTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func remove(specUri: String) async throws -> Bool {
-        let future = try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_remove(self.pointer,
-                                                                      FfiConverterString.lower(specUri), $0)
-            }
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Bool, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarstoremanager_remove(
+                    self.pointer,
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let env = Unmanaged.passRetained(_UniFFI_AskarStoreManager_Remove_Env(rustyFuture: future, continuation: continuation))
-            _UniFFI_AskarStoreManager_Remove_waker(raw_env: env.toOpaque())
+                    FfiConverterString.lower(specUri),
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerboolTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
         }
     }
 
     public func setDefaultLogger() throws {
         try
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_askarstoremanager_set_default_logger(self.pointer, $0)
             }
-    }
-}
-
-private class _UniFFI_AskarStoreManager_Open_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarStore, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarStore, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstoremanager_open_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStoreManager_Open_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStoreManager_Open_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer <UnsafeMutableRawPointer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_open_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStoreManager_Open_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterTypeAskarStore.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStoreManager_Provision_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<AskarStore, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<AskarStore, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstoremanager_provision_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStoreManager_Provision_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStoreManager_Provision_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer <UnsafeMutableRawPointer>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_provision_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStoreManager_Provision_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterTypeAskarStore.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
-    }
-}
-
-private class _UniFFI_AskarStoreManager_Remove_Env {
-    var rustFuture: OpaquePointer
-    var continuation: CheckedContinuation<Bool, Error>
-
-    init(rustyFuture: OpaquePointer, continuation: CheckedContinuation<Bool, Error>) {
-        rustFuture = rustyFuture
-        self.continuation = continuation
-    }
-
-    deinit {
-        try! rustCall {
-            uniffi_aries_askar_fn_method_askarstoremanager_remove_drop(self.rustFuture, $0)
-        }
-    }
-}
-
-private func _UniFFI_AskarStoreManager_Remove_waker(raw_env: UnsafeMutableRawPointer?) {
-    Task {
-        let env = Unmanaged<_UniFFI_AskarStoreManager_Remove_Env>.fromOpaque(raw_env!)
-        let env_ref = env.takeUnretainedValue()
-        let polledResult = UnsafeMutablePointer<Int8>.allocate(capacity: 1)
-        do {
-            let isReady = try rustCallWithError(FfiConverterTypeErrorCode.self) {
-                uniffi_aries_askar_fn_method_askarstoremanager_remove_poll(
-                    env_ref.rustFuture,
-                    _UniFFI_AskarStoreManager_Remove_waker,
-                    env.toOpaque(),
-                    polledResult,
-                    $0
-                )
-            }
-
-            if isReady {
-                env_ref.continuation.resume(returning: try! FfiConverterBool.lift(polledResult.move()))
-                polledResult.deallocate()
-                env.release()
-            }
-        } catch {
-            env_ref.continuation.resume(throwing: error)
-            polledResult.deallocate()
-            env.release()
-        }
     }
 }
 
@@ -2937,7 +2180,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public convenience init() {
         self.init(unsafeFromRawPointer: try! rustCall {
-            uniffi_aries_askar_fn_method_localkeyfactory_new($0)
+            uniffi_aries_askar_fn_constructor_localkeyfactory_new($0)
         })
     }
 
@@ -2947,7 +2190,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func fromJwk(jwk: String) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_from_jwk(self.pointer,
                                                                       FfiConverterString.lower(jwk), $0)
             }
@@ -2956,7 +2199,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func fromJwkSlice(jwk: [UInt8]) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_from_jwk_slice(self.pointer,
                                                                             FfiConverterSequenceUInt8.lower(jwk), $0)
             }
@@ -2965,7 +2208,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func fromPublicBytes(alg: AskarKeyAlg, bytes: [UInt8]) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_from_public_bytes(self.pointer,
                                                                                FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                                FfiConverterSequenceUInt8.lower(bytes), $0)
@@ -2975,7 +2218,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func fromSecretBytes(alg: AskarKeyAlg, bytes: [UInt8]) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_from_secret_bytes(self.pointer,
                                                                                FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                                FfiConverterSequenceUInt8.lower(bytes), $0)
@@ -2985,7 +2228,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func fromSeed(alg: AskarKeyAlg, seed: [UInt8], method: SeedMethod?) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_from_seed(self.pointer,
                                                                        FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                        FfiConverterSequenceUInt8.lower(seed),
@@ -2996,7 +2239,7 @@ public class LocalKeyFactory: LocalKeyFactoryProtocol {
 
     public func generate(alg: AskarKeyAlg, ephemeral: Bool) throws -> AskarLocalKey {
         return try FfiConverterTypeAskarLocalKey.lift(
-            rustCallWithError(FfiConverterTypeErrorCode.self) {
+            rustCallWithError(FfiConverterTypeErrorCode.lift) {
                 uniffi_aries_askar_fn_method_localkeyfactory_generate(self.pointer,
                                                                       FfiConverterTypeAskarKeyAlg.lower(alg),
                                                                       FfiConverterBool.lower(ephemeral), $0)
@@ -3041,6 +2284,63 @@ public func FfiConverterTypeLocalKeyFactory_lift(_ pointer: UnsafeMutableRawPoin
 
 public func FfiConverterTypeLocalKeyFactory_lower(_ value: LocalKeyFactory) -> UnsafeMutableRawPointer {
     return FfiConverterTypeLocalKeyFactory.lower(value)
+}
+
+// Encapsulates an executor that can run Rust tasks
+//
+// On Swift, `Task.detached` can handle this we just need to know what priority to send it.
+public struct UniFfiForeignExecutor {
+    var priority: TaskPriority
+
+    public init(priority: TaskPriority) {
+        self.priority = priority
+    }
+
+    public init() {
+        priority = Task.currentPriority
+    }
+}
+
+private struct FfiConverterForeignExecutor: FfiConverter {
+    typealias SwiftType = UniFfiForeignExecutor
+    // Rust uses a pointer to represent the FfiConverterForeignExecutor, but we only need a u8.
+    // let's use `Int`, which is equivalent to `size_t`
+    typealias FfiType = Int
+
+    static func lift(_ value: FfiType) throws -> SwiftType {
+        UniFfiForeignExecutor(priority: TaskPriority(rawValue: numericCast(value)))
+    }
+
+    static func lower(_ value: SwiftType) -> FfiType {
+        numericCast(value.priority.rawValue)
+    }
+
+    static func read(from _: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        fatalError("FfiConverterForeignExecutor.read not implemented yet")
+    }
+
+    static func write(_: SwiftType, into _: inout [UInt8]) {
+        fatalError("FfiConverterForeignExecutor.read not implemented yet")
+    }
+}
+
+private func uniffiForeignExecutorCallback(executorHandle: Int, delayMs: UInt32, rustTask: UniFfiRustTaskCallback?, taskData: UnsafeRawPointer?) {
+    if let rustTask = rustTask {
+        let executor = try! FfiConverterForeignExecutor.lift(executorHandle)
+        Task.detached(priority: executor.priority) {
+            if delayMs != 0 {
+                let nanoseconds: UInt64 = numericCast(delayMs * 1_000_000)
+                try! await Task.sleep(nanoseconds: nanoseconds)
+            }
+            rustTask(taskData)
+        }
+    }
+    // No else branch: when rustTask is null, we should drop the foreign executor. However, since
+    // its just a value type, we don't need to do anything here.
+}
+
+private func uniffiInitForeignExecutor() {
+    uniffi_foreign_executor_callback_set(uniffiForeignExecutorCallback)
 }
 
 public struct AeadParams {
@@ -3309,6 +2609,10 @@ public enum ErrorCode {
     case Unexpected(message: String)
     case Unsupported(message: String)
     case Custom(message: String)
+
+    fileprivate static func uniffiErrorHandler(_ error: RustBuffer) throws -> Error {
+        return try FfiConverterTypeErrorCode.lift(error)
+    }
 }
 
 public struct FfiConverterTypeErrorCode: FfiConverterRustBuffer {
@@ -3678,9 +2982,533 @@ private struct FfiConverterDictionaryStringString: FfiConverterRustBuffer {
         }
         return dict
     }
+} // Callbacks for async functions
+
+// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+// lift the return value or error and resume the suspended function.
+private func uniffiFutureCallbackHandlerVoidTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue _: UInt8,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<Void, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        continuation.pointee.resume(returning: ())
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
 }
 
-private enum CheckVersionResult {
+private func uniffiFutureCallbackHandleri32(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: Int32,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<Int32, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterInt32.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandleri64TypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: Int64,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<Int64, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterInt64.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerbool(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: Int8,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<Bool, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterBool.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerboolTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: Int8,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<Bool, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterBool.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerstring(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<String, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterString.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerstringTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<String, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterString.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarCrypto(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarCrypto, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarCrypto.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarEcdh1PU(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarEcdh1Pu, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarEcdh1Pu.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarEcdhEs(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarEcdhEs, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarEcdhEs.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarLocalKeyTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarLocalKey, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarLocalKey.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarScanTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarScan, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarScan.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarSessionTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarSession, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarSession.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarStoreTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarStore, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarStore.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarStoreManager(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarStoreManager, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarStoreManager.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeEncryptedBufferTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<EncryptedBuffer, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeEncryptedBuffer.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeLocalKeyFactory(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: UnsafeMutableRawPointer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<LocalKeyFactory, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeLocalKeyFactory.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAeadParamsTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AeadParams, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterTypeAeadParams.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerTypeAskarKeyAlg(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarKeyAlg, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarKeyAlg.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerOptionalstring(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<String?, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterOptionString.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerOptionalTypeAskarEntryTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarEntry?, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterOptionTypeAskarEntry.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerOptionalTypeAskarKeyEntryTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<AskarKeyEntry?, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterOptionTypeAskarKeyEntry.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerOptionalSequenceTypeAskarEntryTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[AskarEntry]?, Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterOptionSequenceTypeAskarEntry.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerSequenceu8(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[UInt8], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterSequenceUInt8.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerSequenceu8TypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[UInt8], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterSequenceUInt8.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerSequencestringTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[String], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterSequenceString.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerSequenceTypeAskarEntryTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[AskarEntry], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterSequenceTypeAskarEntry.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerSequenceTypeAskarKeyEntryTypeErrorCode(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[AskarKeyEntry], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: FfiConverterTypeErrorCode.lift)
+        try continuation.pointee.resume(returning: FfiConverterSequenceTypeAskarKeyEntry.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private func uniffiFutureCallbackHandlerMapStringString(
+    rawContinutation: UnsafeRawPointer,
+    returnValue: RustBuffer,
+    callStatus: RustCallStatus
+) {
+    let continuation = rawContinutation.bindMemory(
+        to: CheckedContinuation<[String: String], Error>.self,
+        capacity: 1
+    )
+
+    do {
+        try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
+        try continuation.pointee.resume(returning: FfiConverterDictionaryStringString.lift(returnValue))
+    } catch {
+        continuation.pointee.resume(throwing: error)
+    }
+}
+
+private enum InitializationResult {
     case ok
     case contractVersionMismatch
     case apiChecksumMismatch
@@ -3688,265 +3516,267 @@ private enum CheckVersionResult {
 
 // Use a global variables to perform the versioning checks. Swift ensures that
 // the code inside is only computed once.
-private var checkVersionResult: CheckVersionResult {
+private var initializationResult: InitializationResult {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 22
     // Get the scaffolding contract version by calling the into the dylib
     let scaffolding_contract_version = ffi_aries_askar_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
-        return CheckVersionResult.contractVersionMismatch
+        return InitializationResult.contractVersionMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_category() != 3260 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarentry_category() != 9181 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_name() != 32165 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarentry_name() != 11028 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_tags() != 25644 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarentry_tags() != 49348 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_value() != 15374 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarentry_value() != 51340 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_algorithm() != 49759 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_algorithm() != 43417 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_is_local() != 55452 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_is_local() != 33202 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_load_local_key() != 48016 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_load_local_key() != 7497 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_metadata() != 37970 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_metadata() != 39155 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_name() != 37206 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_name() != 24854 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_tags() != 44110 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarkeyentry_tags() != 12955 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarscan_fetch_all() != 49886 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarscan_fetch_all() != 21500 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarscan_next() != 24376 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarscan_next() != 41477 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_count() != 1 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_count() != 43084 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch() != 36317 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_fetch() != 19792 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_all() != 57565 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_all() != 8531 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_all_keys() != 16421 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_all_keys() != 215 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_key() != 39145 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_key() != 27301 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_insert_key() != 45535 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_insert_key() != 42290 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_remove_all() != 32725 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_remove_all() != 53877 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_remove_key() != 9007 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_remove_key() != 27473 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_update() != 2672 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_update() != 7409 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_update_key() != 12783 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarsession_update_key() != 59822 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_close() != 15140 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_close() != 58972 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_create_profile() != 27418 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_create_profile() != 40395 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 15534 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 47153 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_rekey() != 33417 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_rekey() != 3405 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_remove_profile() != 38282 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_remove_profile() != 62222 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_scan() != 14373 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_scan() != 50555 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_session() != 50551 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstore_session() != 64491 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_decrypt() != 27175 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_decrypt() != 25118 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_encrypt() != 59752 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_encrypt() != 28841 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_padding() != 19466 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_padding() != 33647 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_params() != 22595 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_params() != 14520 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_random_nonce() != 18087 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_random_nonce() != 50668 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_algorithm() != 53705 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_algorithm() != 5966 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_convert_key() != 41434 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_convert_key() != 13927 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_sign_message() != 17995 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_sign_message() != 17412 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_public() != 56035 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_public() != 28868 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_secret() != 56136 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_secret() != 28252 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprint() != 21833 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprint() != 10570 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprints() != 60939 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprints() != 5596 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_key_exchange() != 37112 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_key_exchange() != 20195 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_public_bytes() != 31459 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_public_bytes() != 54028 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_secret_bytes() != 23429 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_secret_bytes() != 48903 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_unwrap_key() != 8054 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_unwrap_key() != 11811 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_verify_signature() != 44262 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_verify_signature() != 540 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_wrap_key() != 53373 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarlocalkey_wrap_key() != 13547 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext() != 25707 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext() != 33979 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext_tag() != 4068 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext_tag() != 26902 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_nonce() != 58146 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_nonce() != 1935 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_tag() != 5792 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_tag() != 51761 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk() != 3782 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk() != 55690 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk_slice() != 52225 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk_slice() != 34137 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_public_bytes() != 49199 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_public_bytes() != 29014 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_secret_bytes() != 16535 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_secret_bytes() != 48863 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_seed() != 48055 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_seed() != 18970 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_generate() != 30051 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_localkeyfactory_generate() != 30376 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_generate_raw_store_key() != 9452 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstoremanager_generate_raw_store_key() != 16288 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_open() != 44888 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstoremanager_open() != 42440 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_provision() != 52149 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstoremanager_provision() != 17309 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_remove() != 1664 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstoremanager_remove() != 17452 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_set_default_logger() != 9647 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarstoremanager_set_default_logger() != 27660 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_open() != 34635 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_open() != 28082 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal() != 21906 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal() != 17703 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal_open() != 63090 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal_open() != 19764 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_crypto_box() != 19343 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarcrypto_crypto_box() != 50392 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_random_nonce() != 64002 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarcrypto_random_nonce() != 44797 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_decrypt_direct() != 51900 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdhes_decrypt_direct() != 24054 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_derive_key() != 14697 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdhes_derive_key() != 15838 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_encrypt_direct() != 20454 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdhes_encrypt_direct() != 20598 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_receiver_unwrap_key() != 28420 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdhes_receiver_unwrap_key() != 6125 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_sender_wrap_key() != 37744 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdhes_sender_wrap_key() != 42775 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_decrypt_direct() != 51975 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_decrypt_direct() != 20679 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_derive_key() != 11924 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_derive_key() != 44418 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_encrypt_direct() != 40009 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_encrypt_direct() != 51018 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_receiver_unwrap_key() != 48319 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_receiver_unwrap_key() != 60778 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_sender_wrap_key() != 50993 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_sender_wrap_key() != 58620 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi__checksum_method_localkeyfactory_new() != 20118 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi__checksum_constructor_localkeyfactory_new() != 64154 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi__checksum_method_askarstoremanager_new() != 18137 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi__checksum_constructor_askarstoremanager_new() != 57892 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi__checksum_method_askarcrypto_new() != 33512 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi__checksum_constructor_askarcrypto_new() != 42300 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi__checksum_method_askarecdhes_new() != 11563 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi__checksum_constructor_askarecdhes_new() != 15713 {
+        return InitializationResult.apiChecksumMismatch
     }
-    if uniffi__checksum_method_askarecdh1pu_new() != 37763 {
-        return CheckVersionResult.apiChecksumMismatch
+    if uniffi__checksum_constructor_askarecdh1pu_new() != 32728 {
+        return InitializationResult.apiChecksumMismatch
     }
-    return CheckVersionResult.ok
+
+    uniffiInitForeignExecutor()
+    return InitializationResult.ok
 }
 
-private func uniffiCheckFfiVersionMismatch() {
-    switch checkVersionResult {
+private func uniffiEnsureInitialized() {
+    switch initializationResult {
     case .ok:
         break
     case .contractVersionMismatch:

@@ -113,9 +113,7 @@ install_name_tool -id  @rpath/$FRAMEWORK_NAME/$FRAMEWORK_LIBRARY_NAME $OUT_PATH/
 
 # Copy swift wrapper
 # Need some temporary workarounds to compile swift wrapper
-# https://github.com/mozilla/uniffi-rs/issues/1505
 # https://github.com/rust-lang/cargo/issues/11953
-sed -i '' 's/ void \* _Nonnull/UnsafeMutableRawPointer/g' $OUT_PATH/$NAME.swift
 cat <<EOT > $OUT_PATH/import.txt
 #if os(macOS)
 import SystemConfiguration
