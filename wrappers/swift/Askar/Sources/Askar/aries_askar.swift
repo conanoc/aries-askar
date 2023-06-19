@@ -623,7 +623,7 @@ public class AskarEcdh1Pu: AskarEcdh1PUProtocol {
     }
 }
 
-public struct FfiConverterTypeAskarEcdh1Pu: FfiConverter {
+public struct FfiConverterTypeAskarEcdh1PU: FfiConverter {
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = AskarEcdh1Pu
 
@@ -653,12 +653,12 @@ public struct FfiConverterTypeAskarEcdh1Pu: FfiConverter {
     }
 }
 
-public func FfiConverterTypeAskarEcdh1Pu_lift(_ pointer: UnsafeMutableRawPointer) throws -> AskarEcdh1Pu {
-    return try FfiConverterTypeAskarEcdh1Pu.lift(pointer)
+public func FfiConverterTypeAskarEcdh1PU_lift(_ pointer: UnsafeMutableRawPointer) throws -> AskarEcdh1Pu {
+    return try FfiConverterTypeAskarEcdh1PU.lift(pointer)
 }
 
-public func FfiConverterTypeAskarEcdh1Pu_lower(_ value: AskarEcdh1Pu) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeAskarEcdh1Pu.lower(value)
+public func FfiConverterTypeAskarEcdh1PU_lower(_ value: AskarEcdh1Pu) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeAskarEcdh1PU.lower(value)
 }
 
 public protocol AskarEcdhEsProtocol {
@@ -1310,7 +1310,7 @@ public class AskarScan: AskarScanProtocol {
                     self.pointer,
 
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerOptionalSequenceTypeAskarEntryTypeErrorCode,
+                    uniffiFutureCallbackHandlerOptionSequenceTypeAskarEntryTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1358,6 +1358,7 @@ public func FfiConverterTypeAskarScan_lower(_ value: AskarScan) -> UnsafeMutable
 }
 
 public protocol AskarSessionProtocol {
+    func close() async throws
     func count(category: String, tagFilter: String?) async throws -> Int64
     func fetch(category: String, name: String, forUpdate: Bool) async throws -> AskarEntry?
     func fetchAll(category: String, tagFilter: String?, limit: Int64?, forUpdate: Bool) async throws -> [AskarEntry]
@@ -1384,6 +1385,28 @@ public class AskarSession: AskarSessionProtocol {
         try! rustCall { uniffi_aries_askar_fn_free_askarsession(pointer, $0) }
     }
 
+    public func close() async throws {
+        // Suspend the function and call the scaffolding function, passing it a callback handler from
+        // `AsyncTypes.swift`
+        //
+        // Make sure to hold on to a reference to the continuation in the top-level scope so that
+        // it's not freed before the callback is invoked.
+        var continuation: CheckedContinuation<Void, Error>? = nil
+        return try await withCheckedThrowingContinuation {
+            continuation = $0
+            try! rustCall {
+                uniffi_aries_askar_fn_method_askarsession_close(
+                    self.pointer,
+
+                    FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
+                    uniffiFutureCallbackHandlerVoidTypeErrorCode,
+                    &continuation,
+                    $0
+                )
+            }
+        }
+    }
+
     public func count(category: String, tagFilter: String?) async throws -> Int64 {
         // Suspend the function and call the scaffolding function, passing it a callback handler from
         // `AsyncTypes.swift`
@@ -1400,7 +1423,7 @@ public class AskarSession: AskarSessionProtocol {
                     FfiConverterString.lower(category),
                     FfiConverterOptionString.lower(tagFilter),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandleri64TypeErrorCode,
+                    uniffiFutureCallbackHandlerInt64TypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1425,7 +1448,7 @@ public class AskarSession: AskarSessionProtocol {
                     FfiConverterString.lower(name),
                     FfiConverterBool.lower(forUpdate),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerOptionalTypeAskarEntryTypeErrorCode,
+                    uniffiFutureCallbackHandlerOptionTypeAskarEntryTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1502,7 +1525,7 @@ public class AskarSession: AskarSessionProtocol {
                     FfiConverterString.lower(name),
                     FfiConverterBool.lower(forUpdate),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerOptionalTypeAskarKeyEntryTypeErrorCode,
+                    uniffiFutureCallbackHandlerOptionTypeAskarKeyEntryTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1553,7 +1576,7 @@ public class AskarSession: AskarSessionProtocol {
                     FfiConverterString.lower(category),
                     FfiConverterOptionString.lower(tagFilter),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandleri64TypeErrorCode,
+                    uniffiFutureCallbackHandlerInt64TypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1738,7 +1761,7 @@ public class AskarStore: AskarStoreProtocol {
 
                     FfiConverterOptionString.lower(profile),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerstringTypeErrorCode,
+                    uniffiFutureCallbackHandlerStringTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1760,7 +1783,7 @@ public class AskarStore: AskarStoreProtocol {
                     self.pointer,
 
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerstringTypeErrorCode,
+                    uniffiFutureCallbackHandlerStringTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -1807,7 +1830,7 @@ public class AskarStore: AskarStoreProtocol {
 
                     FfiConverterString.lower(profile),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerboolTypeErrorCode,
+                    uniffiFutureCallbackHandlerBoolTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -2009,7 +2032,7 @@ public class AskarStoreManager: AskarStoreManagerProtocol {
 
                     FfiConverterString.lower(specUri),
                     FfiConverterForeignExecutor.lower(UniFfiForeignExecutor()),
-                    uniffiFutureCallbackHandlerboolTypeErrorCode,
+                    uniffiFutureCallbackHandlerBoolTypeErrorCode,
                     &continuation,
                     $0
                 )
@@ -2562,42 +2585,6 @@ public func FfiConverterTypeAskarKeyAlg_lower(_ value: AskarKeyAlg) -> RustBuffe
 
 extension AskarKeyAlg: Equatable, Hashable {}
 
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-public enum SeedMethod {
-    case blsKeyGen
-}
-
-public struct FfiConverterTypeSeedMethod: FfiConverterRustBuffer {
-    typealias SwiftType = SeedMethod
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SeedMethod {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        case 1: return .blsKeyGen
-
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: SeedMethod, into buf: inout [UInt8]) {
-        switch value {
-        case .blsKeyGen:
-            writeInt(&buf, Int32(1))
-        }
-    }
-}
-
-public func FfiConverterTypeSeedMethod_lift(_ buf: RustBuffer) throws -> SeedMethod {
-    return try FfiConverterTypeSeedMethod.lift(buf)
-}
-
-public func FfiConverterTypeSeedMethod_lower(_ value: SeedMethod) -> RustBuffer {
-    return FfiConverterTypeSeedMethod.lower(value)
-}
-
-extension SeedMethod: Equatable, Hashable {}
-
 public enum ErrorCode {
     case Success(message: String)
     case Backend(message: String)
@@ -2704,6 +2691,42 @@ public struct FfiConverterTypeErrorCode: FfiConverterRustBuffer {
 extension ErrorCode: Equatable, Hashable {}
 
 extension ErrorCode: Error {}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+public enum SeedMethod {
+    case blsKeyGen
+}
+
+public struct FfiConverterTypeSeedMethod: FfiConverterRustBuffer {
+    typealias SwiftType = SeedMethod
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SeedMethod {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return .blsKeyGen
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SeedMethod, into buf: inout [UInt8]) {
+        switch value {
+        case .blsKeyGen:
+            writeInt(&buf, Int32(1))
+        }
+    }
+}
+
+public func FfiConverterTypeSeedMethod_lift(_ buf: RustBuffer) throws -> SeedMethod {
+    return try FfiConverterTypeSeedMethod.lift(buf)
+}
+
+public func FfiConverterTypeSeedMethod_lower(_ value: SeedMethod) -> RustBuffer {
+    return FfiConverterTypeSeedMethod.lower(value)
+}
+
+extension SeedMethod: Equatable, Hashable {}
 
 private struct FfiConverterOptionInt64: FfiConverterRustBuffer {
     typealias SwiftType = Int64?
@@ -3004,7 +3027,7 @@ private func uniffiFutureCallbackHandlerVoidTypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandleri32(
+private func uniffiFutureCallbackHandlerInt32(
     rawContinutation: UnsafeRawPointer,
     returnValue: Int32,
     callStatus: RustCallStatus
@@ -3022,7 +3045,7 @@ private func uniffiFutureCallbackHandleri32(
     }
 }
 
-private func uniffiFutureCallbackHandleri64TypeErrorCode(
+private func uniffiFutureCallbackHandlerInt64TypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: Int64,
     callStatus: RustCallStatus
@@ -3040,7 +3063,7 @@ private func uniffiFutureCallbackHandleri64TypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerbool(
+private func uniffiFutureCallbackHandlerBool(
     rawContinutation: UnsafeRawPointer,
     returnValue: Int8,
     callStatus: RustCallStatus
@@ -3058,7 +3081,7 @@ private func uniffiFutureCallbackHandlerbool(
     }
 }
 
-private func uniffiFutureCallbackHandlerboolTypeErrorCode(
+private func uniffiFutureCallbackHandlerBoolTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: Int8,
     callStatus: RustCallStatus
@@ -3076,7 +3099,7 @@ private func uniffiFutureCallbackHandlerboolTypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerstring(
+private func uniffiFutureCallbackHandlerString(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3094,7 +3117,7 @@ private func uniffiFutureCallbackHandlerstring(
     }
 }
 
-private func uniffiFutureCallbackHandlerstringTypeErrorCode(
+private func uniffiFutureCallbackHandlerStringTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3142,7 +3165,7 @@ private func uniffiFutureCallbackHandlerTypeAskarEcdh1PU(
 
     do {
         try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: nil)
-        try continuation.pointee.resume(returning: FfiConverterTypeAskarEcdh1Pu.lift(returnValue))
+        try continuation.pointee.resume(returning: FfiConverterTypeAskarEcdh1PU.lift(returnValue))
     } catch {
         continuation.pointee.resume(throwing: error)
     }
@@ -3328,7 +3351,7 @@ private func uniffiFutureCallbackHandlerTypeAskarKeyAlg(
     }
 }
 
-private func uniffiFutureCallbackHandlerOptionalstring(
+private func uniffiFutureCallbackHandlerOptionString(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3346,7 +3369,7 @@ private func uniffiFutureCallbackHandlerOptionalstring(
     }
 }
 
-private func uniffiFutureCallbackHandlerOptionalTypeAskarEntryTypeErrorCode(
+private func uniffiFutureCallbackHandlerOptionTypeAskarEntryTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3364,7 +3387,7 @@ private func uniffiFutureCallbackHandlerOptionalTypeAskarEntryTypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerOptionalTypeAskarKeyEntryTypeErrorCode(
+private func uniffiFutureCallbackHandlerOptionTypeAskarKeyEntryTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3382,7 +3405,7 @@ private func uniffiFutureCallbackHandlerOptionalTypeAskarKeyEntryTypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerOptionalSequenceTypeAskarEntryTypeErrorCode(
+private func uniffiFutureCallbackHandlerOptionSequenceTypeAskarEntryTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3400,7 +3423,7 @@ private func uniffiFutureCallbackHandlerOptionalSequenceTypeAskarEntryTypeErrorC
     }
 }
 
-private func uniffiFutureCallbackHandlerSequenceu8(
+private func uniffiFutureCallbackHandlerSequenceUInt8(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3418,7 +3441,7 @@ private func uniffiFutureCallbackHandlerSequenceu8(
     }
 }
 
-private func uniffiFutureCallbackHandlerSequenceu8TypeErrorCode(
+private func uniffiFutureCallbackHandlerSequenceUInt8TypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3436,7 +3459,7 @@ private func uniffiFutureCallbackHandlerSequenceu8TypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerSequencestringTypeErrorCode(
+private func uniffiFutureCallbackHandlerSequenceStringTypeErrorCode(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3490,7 +3513,7 @@ private func uniffiFutureCallbackHandlerSequenceTypeAskarKeyEntryTypeErrorCode(
     }
 }
 
-private func uniffiFutureCallbackHandlerMapStringString(
+private func uniffiFutureCallbackHandlerDictionaryStringString(
     rawContinutation: UnsafeRawPointer,
     returnValue: RustBuffer,
     callStatus: RustCallStatus
@@ -3524,235 +3547,238 @@ private var initializationResult: InitializationResult {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_category() != 9181 {
+    if uniffi_aries_askar_checksum_method_askarentry_category() != 3260 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_name() != 11028 {
+    if uniffi_aries_askar_checksum_method_askarentry_name() != 32165 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_tags() != 49348 {
+    if uniffi_aries_askar_checksum_method_askarentry_tags() != 25644 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarentry_value() != 51340 {
+    if uniffi_aries_askar_checksum_method_askarentry_value() != 15374 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_algorithm() != 43417 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_algorithm() != 49759 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_is_local() != 33202 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_is_local() != 55452 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_load_local_key() != 7497 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_load_local_key() != 54061 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_metadata() != 39155 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_metadata() != 37970 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_name() != 24854 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_name() != 37206 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarkeyentry_tags() != 12955 {
+    if uniffi_aries_askar_checksum_method_askarkeyentry_tags() != 44110 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarscan_fetch_all() != 21500 {
+    if uniffi_aries_askar_checksum_method_askarscan_fetch_all() != 38256 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarscan_next() != 41477 {
+    if uniffi_aries_askar_checksum_method_askarscan_next() != 61044 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_count() != 43084 {
+    if uniffi_aries_askar_checksum_method_askarsession_close() != 21663 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch() != 19792 {
+    if uniffi_aries_askar_checksum_method_askarsession_count() != 23751 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_all() != 8531 {
+    if uniffi_aries_askar_checksum_method_askarsession_fetch() != 15446 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_all_keys() != 215 {
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_all() != 14311 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_fetch_key() != 27301 {
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_all_keys() != 20309 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_insert_key() != 42290 {
+    if uniffi_aries_askar_checksum_method_askarsession_fetch_key() != 29640 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_remove_all() != 53877 {
+    if uniffi_aries_askar_checksum_method_askarsession_insert_key() != 50809 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_remove_key() != 27473 {
+    if uniffi_aries_askar_checksum_method_askarsession_remove_all() != 30181 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_update() != 7409 {
+    if uniffi_aries_askar_checksum_method_askarsession_remove_key() != 7409 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarsession_update_key() != 59822 {
+    if uniffi_aries_askar_checksum_method_askarsession_update() != 45947 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_close() != 58972 {
+    if uniffi_aries_askar_checksum_method_askarsession_update_key() != 58440 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_create_profile() != 40395 {
+    if uniffi_aries_askar_checksum_method_askarstore_close() != 5720 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 47153 {
+    if uniffi_aries_askar_checksum_method_askarstore_create_profile() != 52699 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_rekey() != 3405 {
+    if uniffi_aries_askar_checksum_method_askarstore_get_profile_name() != 43933 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_remove_profile() != 62222 {
+    if uniffi_aries_askar_checksum_method_askarstore_rekey() != 35956 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_scan() != 50555 {
+    if uniffi_aries_askar_checksum_method_askarstore_remove_profile() != 36069 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstore_session() != 64491 {
+    if uniffi_aries_askar_checksum_method_askarstore_scan() != 18668 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_decrypt() != 25118 {
+    if uniffi_aries_askar_checksum_method_askarstore_session() != 46605 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_encrypt() != 28841 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_decrypt() != 28744 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_padding() != 33647 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_encrypt() != 26220 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_params() != 14520 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_padding() != 19466 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_random_nonce() != 50668 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_params() != 51278 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_algorithm() != 5966 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_aead_random_nonce() != 61893 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_convert_key() != 13927 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_algorithm() != 53705 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_sign_message() != 17412 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_convert_key() != 35516 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_public() != 28868 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_sign_message() != 39020 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_secret() != 28252 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_public() != 54824 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprint() != 10570 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_secret() != 54958 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprints() != 5596 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprint() != 30788 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_key_exchange() != 20195 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_jwk_thumbprints() != 2898 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_public_bytes() != 54028 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_key_exchange() != 29493 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_to_secret_bytes() != 48903 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_public_bytes() != 10734 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_unwrap_key() != 11811 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_to_secret_bytes() != 33910 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_verify_signature() != 540 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_unwrap_key() != 32063 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarlocalkey_wrap_key() != 13547 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_verify_signature() != 24569 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext() != 33979 {
+    if uniffi_aries_askar_checksum_method_askarlocalkey_wrap_key() != 48354 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext_tag() != 26902 {
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext() != 25707 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_nonce() != 1935 {
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_ciphertext_tag() != 4068 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_encryptedbuffer_tag() != 51761 {
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_nonce() != 58146 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk() != 55690 {
+    if uniffi_aries_askar_checksum_method_encryptedbuffer_tag() != 5792 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk_slice() != 34137 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk() != 44160 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_public_bytes() != 29014 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_jwk_slice() != 57872 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_secret_bytes() != 48863 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_public_bytes() != 47192 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_from_seed() != 18970 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_secret_bytes() != 44895 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_localkeyfactory_generate() != 30376 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_from_seed() != 47817 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_generate_raw_store_key() != 16288 {
+    if uniffi_aries_askar_checksum_method_localkeyfactory_generate() != 15969 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_open() != 42440 {
+    if uniffi_aries_askar_checksum_method_askarstoremanager_generate_raw_store_key() != 65070 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_provision() != 17309 {
+    if uniffi_aries_askar_checksum_method_askarstoremanager_open() != 59212 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_remove() != 17452 {
+    if uniffi_aries_askar_checksum_method_askarstoremanager_provision() != 51063 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarstoremanager_set_default_logger() != 27660 {
+    if uniffi_aries_askar_checksum_method_askarstoremanager_remove() != 60582 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_open() != 28082 {
+    if uniffi_aries_askar_checksum_method_askarstoremanager_set_default_logger() != 42575 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal() != 17703 {
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_open() != 21968 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal_open() != 19764 {
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal() != 6843 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_crypto_box() != 50392 {
+    if uniffi_aries_askar_checksum_method_askarcrypto_box_seal_open() != 65089 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarcrypto_random_nonce() != 44797 {
+    if uniffi_aries_askar_checksum_method_askarcrypto_crypto_box() != 6491 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_decrypt_direct() != 24054 {
+    if uniffi_aries_askar_checksum_method_askarcrypto_random_nonce() != 3121 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_derive_key() != 15838 {
+    if uniffi_aries_askar_checksum_method_askarecdhes_decrypt_direct() != 57738 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_encrypt_direct() != 20598 {
+    if uniffi_aries_askar_checksum_method_askarecdhes_derive_key() != 30605 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_receiver_unwrap_key() != 6125 {
+    if uniffi_aries_askar_checksum_method_askarecdhes_encrypt_direct() != 39447 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdhes_sender_wrap_key() != 42775 {
+    if uniffi_aries_askar_checksum_method_askarecdhes_receiver_unwrap_key() != 44741 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_decrypt_direct() != 20679 {
+    if uniffi_aries_askar_checksum_method_askarecdhes_sender_wrap_key() != 43003 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_derive_key() != 44418 {
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_decrypt_direct() != 45235 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_encrypt_direct() != 51018 {
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_derive_key() != 856 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_receiver_unwrap_key() != 60778 {
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_encrypt_direct() != 19815 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_aries_askar_checksum_method_askarecdh1pu_sender_wrap_key() != 58620 {
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_receiver_unwrap_key() != 16953 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_aries_askar_checksum_method_askarecdh1pu_sender_wrap_key() != 48518 {
         return InitializationResult.apiChecksumMismatch
     }
     if uniffi__checksum_constructor_localkeyfactory_new() != 64154 {

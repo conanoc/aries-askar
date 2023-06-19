@@ -3,6 +3,7 @@ import XCTest
 
 final class StoreTests: XCTestCase {
     var store: AskarStore!
+    var session: AskarSession!
     let storeManager = AskarStoreManager()
     let keyFactory = LocalKeyFactory()
     let temporaryDirectoryURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
@@ -17,13 +18,15 @@ final class StoreTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
 
-        try storeManager.setDefaultLogger()
         let storeURL = temporaryDirectoryURL.appendingPathComponent("test.db")
         let key = try storeManager.generateRawStoreKey(seed: nil)
         store = try await storeManager.provision(specUri: URI_SCHEMA + storeURL.path, keyMethod: "raw", passKey: key, profile: nil, recreate: true)
     }
 
     override func tearDown() async throws {
+        if session != nil {
+            try await session.close()
+        }
         if store != nil {
             let storeURL = temporaryDirectoryURL.appendingPathComponent("test.db")
             try await store.close()
@@ -33,13 +36,13 @@ final class StoreTests: XCTestCase {
     }
 
     func testStoreClose() async throws {
-        let session = try await store.session(profile: nil)
+        session = try await store.session(profile: nil)
         let count = try await session.count(category: "test", tagFilter: nil)
         XCTAssertEqual(count, 0)
     }
 
     func testInsertUpdate() async throws {
-        let session = try await store.session(profile: nil)
+        session = try await store.session(profile: nil)
         try await session.update(
             operation: .insert,
             category: TEST_ENTRY["category"]!,
@@ -109,7 +112,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testScan() async throws {
-        let session = try await store.session(profile: nil)
+        session = try await store.session(profile: nil)
         try await session.update(
             operation: .insert,
             category: TEST_ENTRY["category"]!,
@@ -127,7 +130,7 @@ final class StoreTests: XCTestCase {
     }
 
     func testKeyStore() async throws {
-        let session = try await store.session(profile: nil)
+        session = try await store.session(profile: nil)
         let keypair = try keyFactory.generate(alg: .ed25519, ephemeral: false)
         let keyName = "test_key"
         try await session.insertKey(name: keyName, key: keypair, metadata: "metadata", tags: "{\"a\": \"b\"}", expiryMs: nil)

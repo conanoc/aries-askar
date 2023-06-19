@@ -26,18 +26,29 @@ impl Into<EntryOperation> for AskarEntryOperation {
     }
 }
 
+macro_rules! SESSION_CLOSED_ERROR {
+    () => {
+        ErrorCode::Unexpected { message: String::from("Session is already closed") }
+    };
+}
+
 pub struct AskarSession {
-    session: RwLock<AnySession>,
+    session: RwLock<Option<AnySession>>,
 }
 
 impl AskarSession {
     pub fn new(session: AnySession) -> Self {
-        Self { session: RwLock::new(session) }
+        Self { session: RwLock::new(Some(session)) }
     }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl AskarSession {
+    pub async fn close(&self) -> Result<(), ErrorCode> {
+        self.session.write().await.take();
+        Ok(())
+    }
+
     pub async fn count(
         &self,
         category: String,
@@ -47,6 +58,8 @@ impl AskarSession {
             session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .count(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
@@ -61,6 +74,8 @@ impl AskarSession {
             .session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .fetch(&category, &name, for_update)
             .await?;
         Ok(entry.map(|entry| Arc::new(AskarEntry::new(entry))))
@@ -77,6 +92,8 @@ impl AskarSession {
             .session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .fetch_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?, limit, for_update)
             .await?;
         Ok(entries
@@ -106,6 +123,8 @@ impl AskarSession {
         self.session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .update(operation.into(), &category, &name, Some(&value), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
@@ -120,6 +139,8 @@ impl AskarSession {
             .session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .remove_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
@@ -144,6 +165,8 @@ impl AskarSession {
         self.session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .insert_key(&name, &key.key, metadata.as_deref(), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
@@ -158,6 +181,8 @@ impl AskarSession {
             .session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .fetch_key(&name, for_update)
             .await?;
         Ok(key.map(|entry| Arc::new(AskarKeyEntry::new(entry))))
@@ -176,6 +201,8 @@ impl AskarSession {
             .session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .fetch_all_keys(algorithm.as_deref(), thumbprint.as_deref(), tag_filter, limit, for_update)
             .await?;
         Ok(keys
@@ -185,7 +212,13 @@ impl AskarSession {
     }
 
     pub async fn remove_key(&self, name: String) -> Result<(), ErrorCode> {
-        self.session.write().await.remove_key(&name).await?;
+        self
+            .session
+            .write()
+            .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
+            .remove_key(&name).await?;
         Ok(())
     }
 
@@ -208,6 +241,8 @@ impl AskarSession {
         self.session
             .write()
             .await
+            .as_mut()
+            .ok_or(SESSION_CLOSED_ERROR!())?
             .update_key(&name, metadata.as_deref(), tags.as_deref(), expiry_ms)
             .await?;
         Ok(())
