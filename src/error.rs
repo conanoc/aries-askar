@@ -2,6 +2,7 @@ use std::error::Error as StdError;
 use std::fmt::{self, Display, Formatter};
 
 use crate::crypto::{Error as CryptoError, ErrorKind as CryptoErrorKind};
+use crate::storage::{Error as StorageError, ErrorKind as StorageErrorKind};
 
 /// The possible kinds of error produced by the crate
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -81,7 +82,7 @@ impl Error {
 
     /// Accessor for the error message
     pub fn message(&self) -> Option<&str> {
-        self.message.as_ref().map(String::as_str)
+        self.message.as_deref()
     }
 
     pub(crate) fn with_cause<T: Into<Box<dyn StdError + Send + Sync + 'static>>>(
@@ -131,15 +132,6 @@ impl From<ErrorKind> for Error {
     }
 }
 
-// FIXME would be preferable to remove this auto-conversion and handle
-// all sqlx errors manually, to ensure there is some context around the error
-#[cfg(any(feature = "indy_compat", feature = "postgres", feature = "sqlite"))]
-impl From<sqlx::Error> for Error {
-    fn from(err: sqlx::Error) -> Self {
-        Error::from(ErrorKind::Backend).with_cause(err)
-    }
-}
-
 impl From<CryptoError> for Error {
     fn from(err: CryptoError) -> Self {
         let kind = match err.kind() {
@@ -154,6 +146,28 @@ impl From<CryptoError> for Error {
             CryptoErrorKind::Unsupported => ErrorKind::Unsupported,
         };
         Error::from_msg(kind, err.message())
+    }
+}
+
+impl From<StorageError> for Error {
+    fn from(err: StorageError) -> Self {
+        let (kind, cause, message) = err.into_parts();
+        let kind = match kind {
+            StorageErrorKind::Backend => ErrorKind::Backend,
+            StorageErrorKind::Busy => ErrorKind::Busy,
+            StorageErrorKind::Custom => ErrorKind::Custom,
+            StorageErrorKind::Duplicate => ErrorKind::Duplicate,
+            StorageErrorKind::Encryption => ErrorKind::Encryption,
+            StorageErrorKind::Input => ErrorKind::Input,
+            StorageErrorKind::NotFound => ErrorKind::NotFound,
+            StorageErrorKind::Unexpected => ErrorKind::Unexpected,
+            StorageErrorKind::Unsupported => ErrorKind::Unsupported,
+        };
+        Error {
+            kind,
+            cause,
+            message,
+        }
     }
 }
 

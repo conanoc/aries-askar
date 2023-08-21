@@ -1,5 +1,6 @@
 use core::{
     fmt::{self, Debug, Formatter},
+    hash,
     marker::{PhantomData, PhantomPinned},
     ops::Deref,
 };
@@ -17,7 +18,7 @@ use crate::{
 };
 
 /// A secure representation for fixed-length keys
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct ArrayKey<L: ArrayLength<u8>>(
     GenericArray<u8, L>,
@@ -128,7 +129,7 @@ impl<L: ArrayLength<u8>> From<GenericArray<u8, L>> for ArrayKey<L> {
 impl<L: ArrayLength<u8>> Debug for ArrayKey<L> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if cfg!(test) {
-            f.debug_tuple("ArrayKey").field(&*self).finish()
+            f.debug_tuple("ArrayKey").field(&self.0).finish()
         } else {
             f.debug_tuple("ArrayKey").field(&"<secret>").finish()
         }
@@ -148,6 +149,12 @@ impl<L: ArrayLength<u8>> PartialEq for ArrayKey<L> {
     }
 }
 impl<L: ArrayLength<u8>> Eq for ArrayKey<L> {}
+
+impl<L: ArrayLength<u8>> hash::Hash for ArrayKey<L> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 impl<L: ArrayLength<u8>> Serialize for ArrayKey<L> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

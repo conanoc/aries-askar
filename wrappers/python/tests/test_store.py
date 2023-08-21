@@ -36,7 +36,6 @@ async def store() -> Store:
 
 @mark.asyncio
 async def test_insert_update(store: Store):
-
     async with store as session:
         # Insert a new entry
         await session.insert(
@@ -84,7 +83,6 @@ async def test_insert_update(store: Store):
 
 @mark.asyncio
 async def test_remove_all(store: Store):
-
     async with store as session:
         # Insert a new entry
         await session.insert(
@@ -108,7 +106,6 @@ async def test_remove_all(store: Store):
 
 @mark.asyncio
 async def test_scan(store: Store):
-
     async with store as session:
         await session.insert(
             TEST_ENTRY["category"],
@@ -123,11 +120,22 @@ async def test_scan(store: Store):
     ).fetch_all()
     assert len(rows) == 1 and dict(rows[0]) == TEST_ENTRY
 
+    # Scan entries with non-matching category
+    rows = await store.scan("not the category").fetch_all()
+    assert len(rows) == 0
+
+    # Scan entries with non-matching tag filter
+    rows = await store.scan(TEST_ENTRY["category"], {"~plaintag": "X"}).fetch_all()
+    assert len(rows) == 0
+
+    # Scan entries with no category filter
+    rows = await store.scan(None, {"~plaintag": "a", "enctag": "b"}).fetch_all()
+    assert len(rows) == 1 and dict(rows[0]) == TEST_ENTRY
+
 
 @mark.asyncio
 async def test_txn_basic(store: Store):
     async with store.transaction() as txn:
-
         # Insert a new entry
         await txn.insert(
             TEST_ENTRY["category"],
@@ -155,6 +163,42 @@ async def test_txn_basic(store: Store):
 
     # Check the transaction was committed
     async with store.session() as session:
+        found = await session.fetch(TEST_ENTRY["category"], TEST_ENTRY["name"])
+        assert dict(found) == TEST_ENTRY
+
+
+@mark.asyncio
+async def test_txn_autocommit(store: Store):
+    with raises(Exception):
+        async with store.transaction(autocommit=True) as txn:
+            # Insert a new entry
+            await txn.insert(
+                TEST_ENTRY["category"],
+                TEST_ENTRY["name"],
+                TEST_ENTRY["value"],
+                TEST_ENTRY["tags"],
+            )
+
+            found = await txn.fetch(TEST_ENTRY["category"], TEST_ENTRY["name"])
+            assert dict(found) == TEST_ENTRY
+
+            raise Exception()
+
+    # Row should not have been inserted
+    async with store as session:
+        assert (await session.fetch(TEST_ENTRY["category"], TEST_ENTRY["name"])) is None
+
+    async with store.transaction(autocommit=True) as txn:
+        # Insert a new entry
+        await txn.insert(
+            TEST_ENTRY["category"],
+            TEST_ENTRY["name"],
+            TEST_ENTRY["value"],
+            TEST_ENTRY["tags"],
+        )
+
+    # Transaction should have been committed
+    async with store as session:
         found = await session.fetch(TEST_ENTRY["category"], TEST_ENTRY["name"])
         assert dict(found) == TEST_ENTRY
 
@@ -249,6 +293,10 @@ async def test_profile(store: Store):
 
     profile = await store.create_profile()
 
+    active_profile = await store.get_profile_name()
+    assert (await store.get_default_profile()) == active_profile
+    assert set(await store.list_profiles()) == {active_profile, profile}
+
     async with store.session(profile) as session:
         # Should not find previously stored record
         assert (
@@ -318,3 +366,29 @@ async def test_profile(store: Store):
                 TEST_ENTRY["category"], {"~plaintag": "a", "enctag": "b"}
             )
         ) == 0
+
+    assert (await store.get_default_profile()) != profile
+    await store.set_default_profile(profile)
+    assert (await store.get_default_profile()) == profile
+
+
+@mark.asyncio
+async def test_copy(store: Store):
+    async with store as session:
+        # Insert a new entry
+        await session.insert(
+            TEST_ENTRY["category"],
+            TEST_ENTRY["name"],
+            TEST_ENTRY["value"],
+            TEST_ENTRY["tags"],
+        )
+    profiles = await store.list_profiles()
+
+    copied = await store.copy_to("sqlite://:memory:", "raw", raw_key())
+    assert profiles == await copied.list_profiles()
+    await copied.close(remove=True)
+
+    async with store as session:
+        entries = await session.fetch_all(TEST_ENTRY["category"])
+        assert len(entries) == 1
+        assert entries[0].name == TEST_ENTRY["name"]

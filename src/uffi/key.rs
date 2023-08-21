@@ -22,6 +22,7 @@ pub enum AskarKeyAlg {
     X25519,
     K256,
     P256,
+    P384,
 }
 
 impl Into<KeyAlg> for AskarKeyAlg {
@@ -42,6 +43,7 @@ impl Into<KeyAlg> for AskarKeyAlg {
             AskarKeyAlg::X25519 => KeyAlg::X25519,
             AskarKeyAlg::K256 => KeyAlg::EcCurve(EcCurves::Secp256k1),
             AskarKeyAlg::P256 => KeyAlg::EcCurve(EcCurves::Secp256r1),
+            AskarKeyAlg::P384 => KeyAlg::EcCurve(EcCurves::Secp384r1),
         }
     }
 }
@@ -64,6 +66,7 @@ impl From<KeyAlg> for AskarKeyAlg {
             KeyAlg::X25519 => AskarKeyAlg::X25519,
             KeyAlg::EcCurve(EcCurves::Secp256k1) => AskarKeyAlg::K256,
             KeyAlg::EcCurve(EcCurves::Secp256r1) => AskarKeyAlg::P256,
+            KeyAlg::EcCurve(EcCurves::Secp384r1) => AskarKeyAlg::P384,
         }
     }
 }

@@ -4,13 +4,9 @@ use std::{
 };
 use tokio::sync::RwLock;
 use crate::{
-    backend::{
-        any::AnyStore,
-        ManageBackend,
-    },
+    store::{PassKey, Store, StoreKeyMethod},
     uffi::{error::ErrorCode, scan::AskarScan, session::AskarSession},
-    protect::{generate_raw_store_key, PassKey, StoreKeyMethod},
-    storage::TagFilter,
+    storage::{generate_raw_store_key, entry::TagFilter},
 };
 
 macro_rules! STORE_CLOSED_ERROR {
@@ -56,10 +52,11 @@ impl AskarStoreManager {
             None => StoreKeyMethod::default()
         };
         let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
-        let store = spec_uri.provision_backend(
+        let store = Store::provision(
+            spec_uri.as_str(),
             key_method,
             pass_key,
-            profile.as_deref(),
+            profile,
             recreate,
         ).await?;
         Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
@@ -77,22 +74,23 @@ impl AskarStoreManager {
             None => None
         };
         let pass_key = PassKey::from(pass_key.as_deref()).into_owned();
-        let store = spec_uri.open_backend(
+        let store = Store::open(
+            spec_uri.as_str(),
             key_method,
             pass_key,
-            profile.as_deref(),
+            profile,
         ).await?;
         Ok(Arc::new(AskarStore { store: RwLock::new(Some(store)) }))
     }
 
     pub async fn remove(&self, spec_uri: String) -> Result<bool, ErrorCode> {
-        let removed = spec_uri.remove_backend().await?;
+        let removed = Store::remove(spec_uri.as_str()).await?;
         Ok(removed)
     }
 }
 
 pub struct AskarStore {
-    store: RwLock<Option<AnyStore>>,    // Option is used to allow for the store to be closed
+    store: RwLock<Option<Store>>,    // Option is used to allow for the store to be closed
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -104,7 +102,7 @@ impl AskarStore {
             .await
             .as_ref()
             .ok_or(STORE_CLOSED_ERROR!())?
-            .get_profile_name().to_string();
+            .get_active_profile().to_string();
         Ok(name)
     }
 
@@ -174,7 +172,7 @@ impl AskarStore {
             .ok_or(STORE_CLOSED_ERROR!())?
             .scan(
                 profile,
-                categogy,
+                Some(categogy),
                 tag_filter,
                 offset,
                 limit,

@@ -2,11 +2,12 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 use crate::{
-    any::AnySession,
+    ffi::tags::EntryTagSet,
+    storage::entry::{EntryOperation, TagFilter},
+    store::Session,
     uffi::{error::ErrorCode, entry::AskarEntry, entry::AskarKeyEntry, key::AskarLocalKey},
-    storage::{EntryOperation, TagFilter, EntryTagSet},
 };
 
 #[derive(uniffi::Enum)]
@@ -33,19 +34,19 @@ macro_rules! SESSION_CLOSED_ERROR {
 }
 
 pub struct AskarSession {
-    session: RwLock<Option<AnySession>>,
+    session: Mutex<Option<Session>>,
 }
 
 impl AskarSession {
-    pub fn new(session: AnySession) -> Self {
-        Self { session: RwLock::new(Some(session)) }
+    pub fn new(session: Session) -> Self {
+        Self { session: Mutex::new(Some(session)) }
     }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl AskarSession {
     pub async fn close(&self) -> Result<(), ErrorCode> {
-        self.session.write().await.take();
+        self.session.lock().await.take();
         Ok(())
     }
 
@@ -56,11 +57,11 @@ impl AskarSession {
     ) -> Result<i64, ErrorCode> {
         Ok(self.
             session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
-            .count(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
+            .count(Some(&category), tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
 
@@ -72,7 +73,7 @@ impl AskarSession {
     ) -> Result<Option<Arc<AskarEntry>>, ErrorCode> {
         let entry = self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -90,11 +91,11 @@ impl AskarSession {
     ) -> Result<Vec<Arc<AskarEntry>>, ErrorCode> {
         let entries = self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
-            .fetch_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?, limit, for_update)
+            .fetch_all(Some(&category), tag_filter.as_deref().map(TagFilter::from_str).transpose()?, limit, for_update)
             .await?;
         Ok(entries
             .into_iter()
@@ -121,7 +122,7 @@ impl AskarSession {
             None
         };
         self.session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -137,11 +138,11 @@ impl AskarSession {
     ) -> Result<i64, ErrorCode> {
         Ok(self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
-            .remove_all(&category, tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
+            .remove_all(Some(&category), tag_filter.as_deref().map(TagFilter::from_str).transpose()?)
             .await?)
     }
 
@@ -163,7 +164,7 @@ impl AskarSession {
             None
         };
         self.session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -179,7 +180,7 @@ impl AskarSession {
     ) -> Result<Option<Arc<AskarKeyEntry>>, ErrorCode> {
         let key = self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -199,7 +200,7 @@ impl AskarSession {
         let tag_filter = tag_filter.as_deref().map(TagFilter::from_str).transpose()?;
         let keys = self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -214,7 +215,7 @@ impl AskarSession {
     pub async fn remove_key(&self, name: String) -> Result<(), ErrorCode> {
         self
             .session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?
@@ -239,7 +240,7 @@ impl AskarSession {
             None
         };
         self.session
-            .write()
+            .lock()
             .await
             .as_mut()
             .ok_or(SESSION_CLOSED_ERROR!())?

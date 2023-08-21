@@ -1,6 +1,6 @@
 //! Elliptic curve ECDH and ECDSA support on curve secp256r1
 
-use core::convert::{TryFrom, TryInto};
+use core::convert::TryFrom;
 
 use p256::{
     ecdsa::{
@@ -47,11 +47,11 @@ pub const SECRET_KEY_LENGTH: usize = 32;
 pub const KEYPAIR_LENGTH: usize = SECRET_KEY_LENGTH + PUBLIC_KEY_LENGTH;
 
 /// The 'kty' value of an elliptic curve key JWK
-pub static JWK_KEY_TYPE: &'static str = "EC";
+pub static JWK_KEY_TYPE: &str = "EC";
 /// The 'crv' value of a P-256 key JWK
-pub static JWK_CURVE: &'static str = "P-256";
+pub static JWK_CURVE: &str = "P-256";
 
-type FieldSize = elliptic_curve::FieldSize<p256::NistP256>;
+type FieldSize = elliptic_curve::FieldBytesSize<p256::NistP256>;
 
 /// A P-256 (secp256r1) public key or keypair
 #[derive(Clone, Debug)]
@@ -87,7 +87,7 @@ impl P256KeyPair {
     pub fn sign(&self, message: &[u8]) -> Option<[u8; ES256_SIGNATURE_LENGTH]> {
         if let Some(skey) = self.to_signing_key() {
             let sig: Signature = skey.sign(message);
-            let sigb: [u8; 64] = sig.as_ref().try_into().unwrap();
+            let sigb: [u8; 64] = sig.to_bytes().try_into().unwrap();
             Some(sigb)
         } else {
             None
@@ -119,7 +119,7 @@ impl KeyGen for P256KeyPair {
     fn generate(mut rng: impl KeyMaterial) -> Result<Self, Error> {
         ArrayKey::<FieldSize>::temp(|buf| loop {
             rng.read_okm(buf);
-            if let Ok(key) = SecretKey::from_be_bytes(&buf) {
+            if let Ok(key) = SecretKey::from_bytes(buf) {
                 return Ok(Self::from_secret_key(key));
             }
         })
@@ -128,16 +128,19 @@ impl KeyGen for P256KeyPair {
 
 impl KeySecretBytes for P256KeyPair {
     fn from_secret_bytes(key: &[u8]) -> Result<Self, Error> {
-        Ok(Self::from_secret_key(
-            SecretKey::from_be_bytes(key).map_err(|_| err_msg!(InvalidKeyData))?,
-        ))
+        if let Ok(key) = key.try_into() {
+            if let Ok(sk) = SecretKey::from_bytes(key) {
+                return Ok(Self::from_secret_key(sk));
+            }
+        }
+        Err(err_msg!(InvalidKeyData))
     }
 
     fn with_secret_bytes<O>(&self, f: impl FnOnce(Option<&[u8]>) -> O) -> O {
         if let Some(sk) = self.secret.as_ref() {
             ArrayKey::<FieldSize>::temp(|arr| {
                 ec_common::write_sk(sk, &mut arr[..]);
-                f(Some(&arr))
+                f(Some(arr))
             })
         } else {
             f(None)
@@ -310,7 +313,7 @@ impl KeyExchange for P256KeyPair {
         match self.secret.as_ref() {
             Some(sk) => {
                 let xk = diffie_hellman(sk.to_nonzero_scalar(), other.public.as_affine());
-                out.buffer_write(xk.as_bytes())?;
+                out.buffer_write(xk.raw_secret_bytes().as_ref())?;
                 Ok(())
             }
             None => Err(err_msg!(MissingSecretKey)),
@@ -320,6 +323,8 @@ impl KeyExchange for P256KeyPair {
 
 #[cfg(test)]
 mod tests {
+    use base64::Engine;
+
     use super::*;
     use crate::repr::ToPublicBytes;
 
@@ -337,11 +342,13 @@ mod tests {
             "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
             "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0",
         );
-        let test_pvt = base64::decode_config(test_pvt_b64, base64::URL_SAFE).unwrap();
+        let test_pvt = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(test_pvt_b64)
+            .unwrap();
         let sk = P256KeyPair::from_secret_bytes(&test_pvt).expect("Error creating signing key");
 
         let jwk = sk.to_jwk_public(None).expect("Error converting key to JWK");
-        let jwk = JwkParts::from_str(&jwk).expect("Error parsing JWK");
+        let jwk = JwkParts::try_from_str(&jwk).expect("Error parsing JWK");
         assert_eq!(jwk.kty, JWK_KEY_TYPE);
         assert_eq!(jwk.crv, JWK_CURVE);
         assert_eq!(jwk.x, test_pub_b64.0);
@@ -388,17 +395,15 @@ mod tests {
             "241f765f19d4e6148452f2249d2fa69882244a6ad6e70aadb8848a6409d20712
             4e85faf9587100247de7bdace13a3073b47ec8a531ca91c1375b2b6134344413"
         );
-        let test_pvt = base64::decode_config(
-            "jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI",
-            base64::URL_SAFE_NO_PAD,
-        )
-        .unwrap();
+        let test_pvt = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode("jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI")
+            .unwrap();
         let kp = P256KeyPair::from_secret_bytes(&test_pvt).unwrap();
         let sig = kp.sign(&test_msg[..]).unwrap();
         assert_eq!(sig, &test_sig[..]);
-        assert_eq!(kp.verify_signature(&test_msg[..], &sig[..]), true);
-        assert_eq!(kp.verify_signature(b"Not the message", &sig[..]), false);
-        assert_eq!(kp.verify_signature(&test_msg[..], &[0u8; 64]), false);
+        assert!(kp.verify_signature(&test_msg[..], &sig[..]));
+        assert!(!kp.verify_signature(b"Not the message", &sig[..]));
+        assert!(!kp.verify_signature(&test_msg[..], &[0u8; 64]));
     }
 
     #[test]

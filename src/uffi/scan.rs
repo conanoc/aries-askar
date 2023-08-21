@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::{
     uffi::{error::ErrorCode, entry::AskarEntry},
-    storage::{Entry, Scan},
+    storage::entry::{Entry, Scan},
 };
 
 pub struct AskarScan {

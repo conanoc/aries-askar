@@ -1,11 +1,9 @@
 use std::{ffi::CString, os::raw::c_char, ptr};
 
-use super::{handle::ArcHandle, key::LocalKeyHandle, secret::SecretBuffer, ErrorCode};
-use crate::{
-    error::Error,
-    kms::KeyEntry,
-    storage::{Entry, EntryTagSet},
+use super::{
+    handle::ArcHandle, key::LocalKeyHandle, secret::SecretBuffer, tags::EntryTagSet, ErrorCode,
 };
+use crate::{entry::Entry, error::Error, kms::KeyEntry};
 
 pub enum FfiResultList<R> {
     Single(R),
@@ -28,7 +26,7 @@ impl<R> FfiResultList<R> {
                 }
             }
         }
-        return Err(err_msg!(Input, "Invalid index for result set"));
+        Err(err_msg!(Input, "Invalid index for result set"))
     }
 
     pub fn len(&self) -> i32 {
@@ -245,4 +243,38 @@ pub extern "C" fn askar_key_entry_list_load_local(
         unsafe { *out = LocalKeyHandle::create(key) };
         Ok(ErrorCode::Success)
     }
+}
+
+pub type StringListHandle = ArcHandle<FfiStringList>;
+
+pub type FfiStringList = FfiResultList<String>;
+
+#[no_mangle]
+pub extern "C" fn askar_string_list_count(handle: StringListHandle, count: *mut i32) -> ErrorCode {
+    catch_err! {
+        check_useful_c_ptr!(count);
+        let results = handle.load()?;
+        unsafe { *count = results.len() };
+        Ok(ErrorCode::Success)
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn askar_string_list_get_item(
+    handle: StringListHandle,
+    index: i32,
+    item: *mut *const c_char,
+) -> ErrorCode {
+    catch_err! {
+        check_useful_c_ptr!(item);
+        let results = handle.load()?;
+        let entry = results.get_row(index)?;
+        unsafe { *item = CString::new(entry.clone()).unwrap().into_raw() };
+        Ok(ErrorCode::Success)
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn askar_string_list_free(handle: StringListHandle) {
+    handle.remove();
 }

@@ -1,8 +1,12 @@
 name: "Aries-Askar"
 
 env:
-  RUST_VERSION: "1.58.0"
+  RUST_VERSION: "1.65.0"
   CROSS_VERSION: "0.2.4"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -18,8 +22,13 @@ on:
         required: true
         default: false
         type: boolean
-      publish-wrappers:
-        description: "Publish Wrappers to Registries"
+      publish-python-wrapper:
+        description: "Publish Python Wrapper to Registries"
+        required: true
+        default: false
+        type: boolean
+      publish-javascript-wrapper:
+        description: "Publish JavaScript Wrapper to Registries"
         required: true
         default: false
         type: boolean
@@ -55,7 +64,7 @@ jobs:
       - name: Cargo check
         run: cargo check --workspace
 
-      - if: "runner.os == 'Linux'"
+      - if: ${{ runner.os == 'Linux' }}
         name: Pre-install cross
         run: |
           cargo install --bins --git https://github.com/rust-embedded/cross --tag v${{ env.CROSS_VERSION }} cross
@@ -87,7 +96,7 @@ jobs:
       - name: Debug build
         run: cargo build --all-targets
 
-      - if: "runner.os == 'Linux'"
+      - if: ${{ runner.os == 'Linux' }}
         name: Start postgres (Linux)
         run: |
           sudo systemctl start postgresql.service
@@ -104,9 +113,6 @@ jobs:
 
       - name: Test askar-crypto no default features
         run: cargo test --manifest-path ./askar-crypto/Cargo.toml --no-default-features
-
-      - name: Test askar-bbs no default features
-        run: cargo test --manifest-path ./askar-bbs/Cargo.toml --no-default-features
 
   build-release:
     name: Build library
@@ -242,7 +248,7 @@ jobs:
           name: library-${{ matrix.architecture }}
           path: wrappers/python/aries_askar/
 
-      - if: "runner.os == 'Linux'"
+      - if: ${{ runner.os == 'Linux' }}
         name: Start postgres (Linux)
         run: |
           sudo systemctl start postgresql.service
@@ -259,7 +265,7 @@ jobs:
       - name: Run tests
         # FIXME cross platform test the python package
         # maybe use the cross docker image?
-        if: "matrix.architecture != 'linux-aarch64'"
+        if: ${{ matrix.architecture != 'linux-aarch64' }}
         shell: sh
         run: |
           pip install pytest pytest-asyncio dist/*
@@ -277,7 +283,7 @@ jobs:
           RUST_BACKTRACE: full
           # RUST_LOG: debug
 
-      - if: "runner.os == 'Linux'"
+      - if: ${{ runner.os == 'Linux' }}
         name: Audit wheel
         run: |
           auditwheel show wrappers/python/dist/* | tee auditwheel.log
@@ -285,7 +291,7 @@ jobs:
 
       - if: |
           github.event_name == 'release' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-wrappers == 'true')
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-python-wrapper == 'true')
         name: Publish
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
@@ -306,10 +312,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Node.JS 16.x
+      - name: Set up Node.JS 18.x
         uses: actions/setup-node@v3
         with:
-          node-version: 16.x
+          node-version: 18.x
 
       - name: Fetch library artifacts
         uses: actions/download-artifact@v3
@@ -340,7 +346,7 @@ jobs:
       - name: Set NPM config
         if: |
           github.event_name == 'release' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-wrappers == 'true')
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-javascript-wrapper == 'true')
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           echo "registry=https://registry.npmjs.org/" >> .npmrc
@@ -353,7 +359,7 @@ jobs:
       - name: Publish
         if: |
           github.event_name == 'release' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-wrappers == 'true')
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish-javascript-wrapper == 'true')
         run: npx lerna publish from-package --no-push --no-private --yes --no-git-tag-version
 
   build-ios:
@@ -371,16 +377,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          # First version with support for cdylib: https://github.com/rust-lang/rust/pull/100636
-          toolchain: "1.65.0"
+          toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
-
-      # Not useful unless the toolchain version matches the default
-      # - name: Cache cargo resources
-      #   uses: Swatinem/rust-cache@v2
-      #   with:
-      #     shared-key: deps
-      #     save-if: false
 
       - name: Build
         run: |
@@ -390,12 +388,15 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: library-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/libaries_askar.dylib
+          path: target/${{ matrix.target }}/release/libaries_askar.a
 
   build-android:
     name: Build library (Android)
     needs: [checks]
+    # NB: RUST_VERSION must be 1.64+ here for lower NDK support
+
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         target:
@@ -409,6 +410,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo resources
         uses: Swatinem/rust-cache@v2
@@ -436,7 +442,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Fetch dynamic libraries
+      - name: Fetch static libraries
         uses: actions/download-artifact@v3
 
       - run: >
@@ -498,7 +504,7 @@ jobs:
     if: |
       (github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.publish == 'true'))
+       github.event.inputs.publish-binaries == 'true'))
 
     steps:
       - name: Fetch Android libraries

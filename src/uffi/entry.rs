@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crate::{
     kms::KeyEntry,
-    storage::Entry,
+    storage::entry::Entry,
     uffi::{error::ErrorCode, key::AskarLocalKey},
 };
 

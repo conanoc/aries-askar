@@ -1,18 +1,49 @@
-import { Store, StoreKeyMethod, Key, KeyAlgs, AriesAskarError } from '@hyperledger/aries-askar-shared'
+import { Store, StoreKeyMethod, Key, KeyAlgs, AriesAskarError, KdfMethod } from '@hyperledger/aries-askar-shared'
 import { promises } from 'fs'
 
-import { firstEntry, getRawKey, secondEntry, setup, setupWallet, testStoreUri } from './utils'
+import { firstEntry, getRawKey, secondEntry, setupWallet, testStoreUri } from './utils'
 
 describe('Store and Session', () => {
   let store: Store
 
+  beforeAll(() => {
+    require('@hyperledger/aries-askar-nodejs')
+  })
+
   beforeEach(async () => {
-    setup()
     store = await setupWallet()
   })
 
   afterEach(async () => {
     await store.close(true)
+  })
+
+  test('argon2i mod', async () => {
+    const argon2iModStore = await Store.provision({
+      recreate: true,
+      passKey: 'abc',
+      uri: testStoreUri,
+      keyMethod: new StoreKeyMethod(KdfMethod.Argon2IMod),
+    })
+
+    const session = await argon2iModStore.openSession()
+    await expect(session.fetch({ name: 'unknownKey', category: 'unknownCategory' })).resolves.toBeNull()
+
+    await argon2iModStore.close()
+  })
+
+  test('argon2i int', async () => {
+    const argon2iIntStore = await Store.provision({
+      recreate: true,
+      passKey: 'abc',
+      uri: testStoreUri,
+      keyMethod: new StoreKeyMethod(KdfMethod.Argon2IInt),
+    })
+
+    const session = await argon2iIntStore.openSession()
+    await expect(session.fetch({ name: 'unknownKey', category: 'unknownCategory' })).resolves.toBeNull()
+
+    await argon2iIntStore.close()
   })
 
   test('Rekey', async () => {
@@ -30,12 +61,12 @@ describe('Store and Session', () => {
       recreate: true,
       profile: 'rekey',
       uri: `sqlite://${storagePath}/rekey.db`,
-      keyMethod: StoreKeyMethod.Raw,
+      keyMethod: new StoreKeyMethod(KdfMethod.Raw),
       passKey: initialKey,
     })
 
     const newKey = Store.generateRawKey()
-    await newStore.rekey({ keyMethod: StoreKeyMethod.Raw, passKey: newKey })
+    await newStore.rekey({ keyMethod: new StoreKeyMethod(KdfMethod.Raw), passKey: newKey })
 
     await newStore.close()
 
@@ -43,7 +74,7 @@ describe('Store and Session', () => {
       Store.open({
         profile: 'rekey',
         uri: `sqlite://${storagePath}/rekey.db`,
-        keyMethod: StoreKeyMethod.Raw,
+        keyMethod: new StoreKeyMethod(KdfMethod.Raw),
         passKey: initialKey,
       })
     ).rejects.toThrowError(AriesAskarError)
@@ -51,7 +82,7 @@ describe('Store and Session', () => {
     newStore = await Store.open({
       profile: 'rekey',
       uri: `sqlite://${storagePath}/rekey.db`,
-      keyMethod: StoreKeyMethod.Raw,
+      keyMethod: new StoreKeyMethod(KdfMethod.Raw),
       passKey: newKey,
     })
 
@@ -172,7 +203,7 @@ describe('Store and Session', () => {
       metadata: 'updated metadata',
     })
 
-    expect(key.jwkThumbprint === fetchedKey1.key.jwkThumbprint).toBeTruthy()
+    expect(key.jwkThumbprint === fetchedKey1?.key.jwkThumbprint).toBeTruthy()
 
     const found = await session.fetchAllKeys({
       algorithm: KeyAlgs.Ed25519,
@@ -184,13 +215,13 @@ describe('Store and Session', () => {
 
     await session.removeKey({ name: keyName })
 
-    await expect(session.fetchKey({ name: keyName })).rejects.toThrowError(AriesAskarError)
+    await expect(session.fetchKey({ name: keyName })).resolves.toBeNull()
 
     await session.close()
 
     // Clear objects
-    fetchedKey1.key.handle.free()
-    fetchedKey2.key.handle.free()
+    fetchedKey1?.key.handle.free()
+    fetchedKey2?.key.handle.free()
     key.handle.free()
     found.forEach((entry) => entry.key.handle.free())
   })
@@ -212,7 +243,7 @@ describe('Store and Session', () => {
     if (!store.uri.includes(':memory:')) {
       // Test accessing profile after re-opening
       const key = getRawKey()
-      const store2 = await Store.open({ uri: testStoreUri, keyMethod: StoreKeyMethod.Raw, passKey: key })
+      const store2 = await Store.open({ uri: testStoreUri, keyMethod: new StoreKeyMethod(KdfMethod.Raw), passKey: key })
       const session3 = await store2.openSession()
       //Should not find previously stored record
       await expect(session3.count(firstEntry)).resolves.toStrictEqual(0)
